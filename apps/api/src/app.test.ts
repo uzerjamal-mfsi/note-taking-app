@@ -14,3 +14,28 @@ describe("security headers", () => {
     expect(response.headers["content-security-policy"]).toBeDefined();
   });
 });
+
+describe("CORS", () => {
+  it("allows credentials for an allow-listed origin", async () => {
+    const app = createApp(makeTestEnv({ CORS_ALLOWED_ORIGINS: ["http://localhost:5173"] }));
+
+    const response = await request(app)
+      .options("/")
+      .set("Origin", "http://localhost:5173")
+      .set("Access-Control-Request-Method", "GET");
+
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    expect(response.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
+  });
+
+  it("does not allow credentials/origin for a non-allow-listed origin", async () => {
+    const app = createApp(makeTestEnv({ CORS_ALLOWED_ORIGINS: ["http://localhost:5173"] }));
+
+    const response = await request(app)
+      .options("/")
+      .set("Origin", "http://evil.example.com")
+      .set("Access-Control-Request-Method", "GET");
+
+    expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+});

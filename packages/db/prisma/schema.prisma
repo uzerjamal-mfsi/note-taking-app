@@ -7,3 +7,32 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id                String    @id @default(uuid())
+  userId            String
+  tokenHash         String    @unique
+  familyId          String
+  revokedAt         DateTime?
+  replacedByTokenId String?   @unique
+  expiresAt         DateTime
+  createdAt         DateTime  @default(now())
+
+  user        User          @relation(fields: [userId], references: [id])
+  replacedBy  RefreshToken? @relation("RefreshTokenReplacement", fields: [replacedByTokenId], references: [id])
+  replacedFor RefreshToken? @relation("RefreshTokenReplacement")
+
+  @@index([familyId])
+  @@index([userId])
+}

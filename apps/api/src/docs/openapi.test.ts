@@ -14,6 +14,18 @@ describe("API docs", () => {
     expect(response.body.paths["/health"]).toBeDefined();
   });
 
+  it("lists the /auth endpoints", async () => {
+    const app = createApp(makeTestEnv({ NODE_ENV: "development" }));
+
+    const response = await request(app).get("/api-docs/openapi.json");
+
+    expect(response.status).toBe(200);
+    expect(response.body.paths["/auth/register"]?.post).toBeDefined();
+    expect(response.body.paths["/auth/login"]?.post).toBeDefined();
+    expect(response.body.paths["/auth/refresh"]?.post).toBeDefined();
+    expect(response.body.paths["/auth/logout"]?.post).toBeDefined();
+  });
+
   it("returns 404 for the docs path in production", async () => {
     const app = createApp(makeTestEnv({ NODE_ENV: "production" }));
 
