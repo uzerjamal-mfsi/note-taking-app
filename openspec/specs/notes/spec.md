@@ -67,11 +67,80 @@ The system SHALL allow an authenticated user to retrieve one of their own, non-d
 - **THEN** the system responds `401 Unauthorized`
 
 ### Requirement: List own notes
-The system SHALL allow an authenticated user to list their own non-deleted notes via `GET /notes`, responding `200 OK` with an array containing every non-deleted note owned by the caller and no notes owned by any other user. The system SHALL NOT apply pagination, sorting, or filtering to this list.
+The system SHALL allow an authenticated user to list their own non-deleted notes via `GET /notes`, responding `200 OK` with a page of matching notes and no notes owned by any other user. The response body SHALL be a JSON object `{ data: Note[], meta: { page, pageSize, total, totalPages, hasNextPage, hasPreviousPage } }`, where:
+- `data` is the notes on the requested page
+- `page` and `pageSize` echo the effective (post-default) values
+- `total` is the count of all notes matching the request (before pagination is applied)
+- `totalPages` is the number of pages of size `pageSize` needed to hold `total` notes (`0` when `total` is `0`)
+- `hasNextPage` is `true` when a page after `page` exists, else `false`
+- `hasPreviousPage` is `true` when a page before `page` exists, else `false`
+
+The system SHALL accept the following optional query parameters on `GET /notes`:
+- `page`: a positive integer, default `1`.
+- `pageSize`: a positive integer, default `20`, maximum `100`.
+- `sortBy`: one of `createdAt` or `updatedAt`, default `updatedAt`.
+- `sortDir`: one of `asc` or `desc`, default `desc`.
+- `tags`: a comma-separated list of tag names. Each name SHALL be trimmed of surrounding whitespace, and any resulting empty name SHALL be dropped, before matching; at most 10 tag names may be supplied after this normalization. When present, the system SHALL return only notes that have at least one of the listed tags (OR matching), matched case-insensitively. When absent (or reduced to zero names after normalization), the system SHALL NOT filter by tag.
+
+Within a requested sort order, the system SHALL break ties deterministically (by `id`, in the same direction as `sortDir`) so that two notes sharing the same `sortBy` value always appear in the same relative order and neither page repeats nor skips a note across requests.
+
+A `page` beyond the last available page SHALL return `200 OK` with an empty `data` array and the correct `total`/`totalPages`/`hasNextPage`/`hasPreviousPage`, not an error. A `page`, `pageSize`, `sortBy`, `sortDir`, or `tags` value that does not conform to the above (including non-integer `page`/`pageSize`, `pageSize` above `100`, a `sortBy`/`sortDir` outside the listed values, or more than 10 tag names after normalization) SHALL be rejected with `422 Unprocessable Entity` without querying the database.
 
 #### Scenario: Lists only the caller's non-deleted notes
 - **WHEN** an authenticated user requests `GET /notes` and owns two non-deleted notes, one soft-deleted note, and another user owns a separate note
-- **THEN** the system responds `200 OK` with exactly the caller's two non-deleted notes
+- **THEN** the system responds `200 OK` with `data` containing exactly the caller's two non-deleted notes and `meta.total` equal to `2`
+
+#### Scenario: Default pagination
+- **WHEN** an authenticated user with 25 non-deleted notes requests `GET /notes` with no query parameters
+- **THEN** the system responds `200 OK` with `meta.page` equal to `1`, `meta.pageSize` equal to `20`, `meta.total` equal to `25`, `meta.totalPages` equal to `2`, `meta.hasNextPage` equal to `true`, `meta.hasPreviousPage` equal to `false`, and `data` containing the 20 notes sorted by `updatedAt` descending
+
+#### Scenario: Requesting a later page
+- **WHEN** an authenticated user with 25 non-deleted notes requests `GET /notes?page=2&pageSize=20`
+- **THEN** the system responds `200 OK` with `data` containing the remaining 5 notes, `meta.total` equal to `25`, `meta.totalPages` equal to `2`, `meta.hasNextPage` equal to `false`, and `meta.hasPreviousPage` equal to `true`
+
+#### Scenario: Page beyond the last page
+- **WHEN** an authenticated user with 5 non-deleted notes requests `GET /notes?page=3&pageSize=20`
+- **THEN** the system responds `200 OK` with an empty `data` array, `meta.total` equal to `5`, `meta.totalPages` equal to `1`, and `meta.hasNextPage` equal to `false`
+
+#### Scenario: Sorting by createdAt ascending
+- **WHEN** an authenticated user requests `GET /notes?sortBy=createdAt&sortDir=asc`
+- **THEN** the system responds `200 OK` with `data` ordered from the earliest-created note to the most recently created
+
+#### Scenario: Stable ordering when sort values tie
+- **WHEN** an authenticated user owns several notes with an identical `updatedAt` timestamp and requests `GET /notes` across multiple pages with the default sort
+- **THEN** each note appears on exactly one page, in the same relative order, on every request, ordered by `id` descending among the tied notes
+
+#### Scenario: Filtering by a single tag
+- **WHEN** an authenticated user requests `GET /notes?tags=work` and owns three non-deleted notes, of which two have a tag named `work`
+- **THEN** the system responds `200 OK` with `data` containing exactly those two notes
+
+#### Scenario: Filtering by multiple tags is OR, not AND
+- **WHEN** an authenticated user requests `GET /notes?tags=work,personal` and owns one note tagged only `work`, one note tagged only `personal`, and one note tagged neither
+- **THEN** the system responds `200 OK` with `data` containing exactly the two tagged notes
+
+#### Scenario: Tag filtering is case-insensitive
+- **WHEN** an authenticated user requests `GET /notes?tags=Work` and owns a note tagged with a tag whose stored name is `work`
+- **THEN** the system responds `200 OK` with `data` containing that note
+
+#### Scenario: Tag names are trimmed and blank entries are dropped
+- **WHEN** an authenticated user requests `GET /notes?tags=%20work%20,,personal` (i.e. `tags` containing `" work "`, an empty entry, and `"personal"`)
+- **THEN** the system treats the filter as `["work", "personal"]` and responds `200 OK` with notes matching either tag
+
+#### Scenario: Tag filter matching no notes
+- **WHEN** an authenticated user requests `GET /notes?tags=nonexistent` and owns non-deleted notes but none carry that tag
+- **THEN** the system responds `200 OK` with an empty `data` array and `meta.total` equal to `0`
+
+#### Scenario: Validation failure - pageSize exceeds maximum
+- **WHEN** an authenticated user requests `GET /notes?pageSize=101`
+- **THEN** the system responds `422 Unprocessable Entity` and does not query notes
+
+#### Scenario: Validation failure - invalid sortBy
+- **WHEN** an authenticated user requests `GET /notes?sortBy=title`
+- **THEN** the system responds `422 Unprocessable Entity` and does not query notes
+
+#### Scenario: Validation failure - too many tags
+- **WHEN** an authenticated user requests `GET /notes?tags=` followed by 11 distinct, non-blank tag names
+- **THEN** the system responds `422 Unprocessable Entity` and does not query notes
 
 #### Scenario: Authorization denied - unauthenticated
 - **WHEN** a request to `GET /notes` carries no valid access token

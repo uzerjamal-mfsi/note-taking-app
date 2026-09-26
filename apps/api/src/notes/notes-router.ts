@@ -1,6 +1,10 @@
 import { Router } from "express";
 import type { PrismaClient } from "@note-taking-app/db";
-import { createNoteRequestSchema, updateNoteRequestSchema } from "@note-taking-app/shared";
+import {
+  createNoteRequestSchema,
+  listNotesQuerySchema,
+  updateNoteRequestSchema,
+} from "@note-taking-app/shared";
 import type { Env } from "../config/env.js";
 import { asyncHandler } from "../middleware/async-handler.js";
 import { requireAuth } from "../middleware/require-auth.js";
@@ -20,7 +24,12 @@ export function createNotesRouter(prisma: PrismaClient, env: Env): Router {
     validate(createNoteRequestSchema, "body"),
     asyncHandler(controller.create),
   );
-  router.get("/notes", auth, asyncHandler(controller.list));
+  router.get(
+    "/notes",
+    auth,
+    validate(listNotesQuerySchema, "query"),
+    asyncHandler(controller.list),
+  );
   router.get("/notes/:id", auth, asyncHandler(controller.get));
   router.patch(
     "/notes/:id",

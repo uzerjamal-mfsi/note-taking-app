@@ -19,6 +19,7 @@ model User {
   refreshTokens     RefreshToken[]
   passwordResetOtps PasswordResetOtp[]
   notes             Note[]
+  tags              Tag[]
 }
 
 model Note {
@@ -30,7 +31,8 @@ model Note {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  user User @relation(fields: [userId], references: [id])
+  user User      @relation(fields: [userId], references: [id])
+  tags NoteTag[]
 
   // The actual index in the database is a partial index —
   // `CREATE INDEX ... ON "Note"("userId") WHERE "deletedAt" IS NULL` — hand-edited
@@ -43,6 +45,44 @@ model Note {
   // it (Ctrl+C) and leave the migration history as-is; `prisma migrate status`/
   // `prisma migrate deploy` are unaffected and report no pending migrations.
   @@index([userId, deletedAt])
+}
+
+model Tag {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  // Unused in this change (AB-1005) — added ahead of AB-1006's tag-management
+  // feature so that ticket doesn't need its own migration for a column with no
+  // other dependents. Nothing here reads or writes it.
+  color     String   @default("#64748B")
+  createdAt DateTime @default(now())
+
+  user  User      @relation(fields: [userId], references: [id])
+  notes NoteTag[]
+
+  // The actual constraint in the database is a case-insensitive unique index —
+  // `CREATE UNIQUE INDEX ... ON "Tag" (userId, lower(name))` — hand-edited into
+  // the migration that introduces this model because Prisma's schema DSL can't
+  // express a functional index. This declaration is the closest Prisma-representable
+  // approximation, kept so Prisma still knows a uniqueness constraint exists. Because
+  // it does not match the real functional index, `prisma migrate dev` will detect
+  // "drift" and interactively offer to generate a fixup migration — do NOT accept
+  // that prompt (it would silently replace the case-insensitive index with a
+  // plain composite one). Cancel it (Ctrl+C) and leave the migration history as-is;
+  // `prisma migrate status`/`prisma migrate deploy` are unaffected and report no
+  // pending migrations.
+  @@unique([userId, name])
+}
+
+model NoteTag {
+  noteId String
+  tagId  String
+
+  note Note @relation(fields: [noteId], references: [id])
+  tag  Tag  @relation(fields: [tagId], references: [id])
+
+  @@id([noteId, tagId])
+  @@index([tagId])
 }
 
 model PasswordResetOtp {

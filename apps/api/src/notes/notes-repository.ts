@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@note-taking-app/db";
+import type { ListNotesQuery } from "@note-taking-app/shared";
 
 const NOTE_SELECT = {
   id: true,
@@ -38,11 +39,34 @@ export class NotesRepository {
     });
   }
 
-  listOwned(userId: string): Promise<NoteRecord[]> {
-    return this.prisma.note.findMany({
-      where: { userId, deletedAt: null },
-      select: NOTE_SELECT,
-    });
+  async list(
+    userId: string,
+    query: ListNotesQuery,
+  ): Promise<{ notes: NoteRecord[]; total: number }> {
+    const where: Prisma.NoteWhereInput = {
+      userId,
+      deletedAt: null,
+      ...(query.tags && query.tags.length > 0
+        ? { tags: { some: { tag: { userId, name: { in: query.tags, mode: "insensitive" } } } } }
+        : {}),
+    };
+    const orderBy: Prisma.NoteOrderByWithRelationInput[] = [
+      { [query.sortBy]: query.sortDir },
+      { id: query.sortDir },
+    ];
+
+    const [total, notes] = await this.prisma.$transaction([
+      this.prisma.note.count({ where }),
+      this.prisma.note.findMany({
+        where,
+        orderBy,
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        select: NOTE_SELECT,
+      }),
+    ]);
+
+    return { notes, total };
   }
 
   async updateOwned(id: string, userId: string, data: UpdateNoteInput): Promise<NoteRecord | null> {

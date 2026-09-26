@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_CONTENT_DEPTH,
   createNoteRequestSchema,
+  listNotesQuerySchema,
   noteDtoSchema,
   updateNoteRequestSchema,
 } from "./note-contracts.js";
@@ -98,5 +99,105 @@ describe("noteDtoSchema", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe("listNotesQuerySchema", () => {
+  it("defaults page, pageSize, sortBy, sortDir, and tags when the query is empty", () => {
+    const result = listNotesQuerySchema.safeParse({});
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({
+        page: 1,
+        pageSize: 20,
+        sortBy: "updatedAt",
+        sortDir: "desc",
+        tags: undefined,
+      });
+    }
+  });
+
+  it("accepts valid overrides for every field", () => {
+    const result = listNotesQuerySchema.safeParse({
+      page: "2",
+      pageSize: "50",
+      sortBy: "createdAt",
+      sortDir: "asc",
+      tags: "work",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({
+        page: 2,
+        pageSize: 50,
+        sortBy: "createdAt",
+        sortDir: "asc",
+        tags: ["work"],
+      });
+    }
+  });
+
+  it("rejects pageSize above 100", () => {
+    const result = listNotesQuerySchema.safeParse({ pageSize: "101" });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an unknown sortBy", () => {
+    const result = listNotesQuerySchema.safeParse({ sortBy: "title" });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an unknown sortDir", () => {
+    const result = listNotesQuerySchema.safeParse({ sortDir: "sideways" });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a non-integer page", () => {
+    const result = listNotesQuerySchema.safeParse({ page: "1.5" });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a non-integer pageSize", () => {
+    const result = listNotesQuerySchema.safeParse({ pageSize: "abc" });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("splits a comma-separated tags list", () => {
+    const result = listNotesQuerySchema.safeParse({ tags: "work,personal" });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tags).toEqual(["work", "personal"]);
+    }
+  });
+
+  it("trims whitespace and drops empty tokens from tags", () => {
+    const result = listNotesQuerySchema.safeParse({ tags: " work ,,personal" });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tags).toEqual(["work", "personal"]);
+    }
+  });
+
+  it("rejects more than 10 non-blank tag names", () => {
+    const tags = Array.from({ length: 11 }, (_, i) => `tag${i}`).join(",");
+    const result = listNotesQuerySchema.safeParse({ tags });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts exactly 10 non-blank tag names", () => {
+    const tags = Array.from({ length: 10 }, (_, i) => `tag${i}`).join(",");
+    const result = listNotesQuerySchema.safeParse({ tags });
+
+    expect(result.success).toBe(true);
   });
 });
