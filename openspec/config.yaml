@@ -1,0 +1,30 @@
+schema: spec-driven
+
+context: |
+Product: Note Taking App (full-stack pnpm monorepo)
+Backend: Node.js 22, Express 5, TypeScript, Prisma ORM, PostgreSQL 16
+Frontend: React 19, Vite, TypeScript, TanStack Query, Zustand, TipTap, shadcn/ui
+Shared: packages/shared holds Zod schemas + inferred TypeScript types for all API contracts
+Auth: JWT access token (15 min) + refresh token (7 days) stored in the database
+API: REST, JSON
+Search: PostgreSQL Full-Text Search
+Testing: Vitest, Supertest, Playwright
+Monorepo: pnpm workspaces
+Notes: CRUD with soft delete, pagination, sorting, tag filtering, sharing, and version history
+Out of scope: real-time collaboration, file/image attachments, mobile app, OAuth/social login, note folders/nesting, actual email sending
+
+rules:
+proposal:
+  - Link the ticket ID
+  - Include impact analysis and rollback plan
+  - Call out any schema changes, migrations or new indexes
+specs:
+  - Use WHEN/THEN scenarios
+  - Always include an authorization-denied scenario
+  - Always include a validation-failure scenario
+design:
+  - Reference existing patterns before introducing new npm packages
+  - Define request/response Zod schemas in packages/shared first
+tasks:
+  - Tests are written before implementation for each task
+  - Separate API tasks from web (React) tasks so they can run in parallel
