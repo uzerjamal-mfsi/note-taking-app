@@ -13,6 +13,7 @@ const FORGOT_PASSWORD_URL = "/auth/forgot-password";
 const RESET_PASSWORD_URL = "/auth/reset-password";
 
 beforeEach(async () => {
+  await prisma.note.deleteMany();
   await prisma.passwordResetOtp.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();

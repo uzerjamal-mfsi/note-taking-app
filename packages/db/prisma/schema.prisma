@@ -18,6 +18,31 @@ model User {
 
   refreshTokens     RefreshToken[]
   passwordResetOtps PasswordResetOtp[]
+  notes             Note[]
+}
+
+model Note {
+  id        String    @id @default(uuid())
+  userId    String
+  title     String
+  content   Json
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  // The actual index in the database is a partial index —
+  // `CREATE INDEX ... ON "Note"("userId") WHERE "deletedAt" IS NULL` — hand-edited
+  // into migration 20260926144918_add_note because Prisma's schema DSL can't express
+  // a WHERE-qualified index. This declaration is the closest Prisma-representable
+  // approximation, kept so Prisma still knows a userId index exists. Because it does
+  // not match the real partial index, `prisma migrate dev` will detect "drift" and
+  // interactively offer to generate a fixup migration — do NOT accept that prompt
+  // (it would silently replace the partial index with a plain composite one). Cancel
+  // it (Ctrl+C) and leave the migration history as-is; `prisma migrate status`/
+  // `prisma migrate deploy` are unaffected and report no pending migrations.
+  @@index([userId, deletedAt])
 }
 
 model PasswordResetOtp {

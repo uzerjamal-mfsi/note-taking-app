@@ -19,6 +19,7 @@ function extractCookie(response: request.Response, name: string): string | undef
 }
 
 beforeEach(async () => {
+  await prisma.note.deleteMany();
   await prisma.passwordResetOtp.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
