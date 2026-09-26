@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/dist-node
+**/coverage
+**/.git
+**/generated
+.env
+.env.*
+!.env.example

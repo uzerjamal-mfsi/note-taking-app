@@ -1,0 +1,33 @@
+{
+  "name": "@note-taking-app/config",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./tsconfig/base.json": "./tsconfig/base.json",
+    "./tsconfig/node.json": "./tsconfig/node.json",
+    "./tsconfig/react.json": "./tsconfig/react.json",
+    "./eslint": "./src/eslint.js",
+    "./eslint-react": "./src/eslint-react.js",
+    "./prettier": "./src/prettier.js",
+    "./vitest": "./src/vitest.js",
+    "./structure-rule": "./src/structure-rule.js",
+    "./commitlint-ticket-rule": "./src/commitlint-ticket-rule.js"
+  },
+  "scripts": {
+    "build": "echo \"@note-taking-app/config: nothing to build\"",
+    "typecheck": "echo \"@note-taking-app/config: no TS sources to typecheck\"",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@eslint/js": "9.15.0",
+    "eslint-config-prettier": "9.1.0",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react-hooks": "5.0.0",
+    "eslint-plugin-react-refresh": "0.4.14",
+    "typescript-eslint": "8.16.0"
+  },
+  "devDependencies": {
+    "vitest": "3.0.0"
+  }
+}

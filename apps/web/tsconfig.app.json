@@ -1,0 +1,12 @@
+{
+  "extends": "@note-taking-app/config/tsconfig/react.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src"]
+}

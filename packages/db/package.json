@@ -1,0 +1,24 @@
+{
+  "name": "@note-taking-app/db",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"@note-taking-app/db: no tests yet\"",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate"
+  },
+  "dependencies": {
+    "@prisma/client": "5.22.0"
+  },
+  "devDependencies": {
+    "@note-taking-app/config": "workspace:*",
+    "@types/node": "22.10.1",
+    "prisma": "5.22.0",
+    "typescript": "5.7.2"
+  }
+}
