@@ -16,6 +16,7 @@ async function createUser() {
 }
 
 beforeEach(async () => {
+  await prisma.note.deleteMany();
   await prisma.passwordResetOtp.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();

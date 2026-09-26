@@ -11,6 +11,7 @@ const REGISTER_URL = "/auth/register";
 const FORGOT_PASSWORD_URL = "/auth/forgot-password";
 
 beforeEach(async () => {
+  await prisma.note.deleteMany();
   await prisma.passwordResetOtp.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
