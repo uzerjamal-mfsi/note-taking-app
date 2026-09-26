@@ -18,6 +18,7 @@ async function createUser() {
 const HOUR_MS = 60 * 60 * 1000;
 
 beforeEach(async () => {
+  await prisma.passwordResetOtp.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
 });

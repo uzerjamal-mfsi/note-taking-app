@@ -25,3 +25,20 @@ export const authResponseDtoSchema = z.object({
   accessToken: z.string(),
 });
 export type AuthResponseDto = z.infer<typeof authResponseDtoSchema>;
+
+export const forgotPasswordRequestSchema = z.object({
+  email: z.string().trim().email(),
+});
+export type ForgotPasswordRequest = z.infer<typeof forgotPasswordRequestSchema>;
+
+export const resetPasswordRequestSchema = z.object({
+  email: z.string().trim().email(),
+  otp: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
+
+export const authAckResponseSchema = z.object({
+  message: z.string(),
+});
+export type AuthAckResponse = z.infer<typeof authAckResponseSchema>;

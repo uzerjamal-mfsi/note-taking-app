@@ -26,6 +26,7 @@ function extractCookie(response: request.Response, name: string): string {
 }
 
 beforeEach(async () => {
+  await prisma.passwordResetOtp.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
 });
