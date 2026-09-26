@@ -1,11 +1,16 @@
 import { Router, type Response } from "express";
 import type { PrismaClient } from "@note-taking-app/db";
 import {
+  forgotPasswordRequestSchema,
   loginRequestSchema,
   registerRequestSchema,
+  resetPasswordRequestSchema,
+  type AuthAckResponse,
   type AuthResponseDto,
+  type ForgotPasswordRequest,
   type LoginRequest,
   type RegisterRequest,
+  type ResetPasswordRequest,
 } from "@note-taking-app/shared";
 import type { Env } from "../config/env.js";
 import { AppError } from "../errors/app-error.js";
@@ -94,6 +99,39 @@ export function createAuthRouter(prisma: PrismaClient, env: Env): Router {
 
       setRefreshCookie(res, session.refreshToken, env);
       res.status(200).json({ accessToken: session.accessToken });
+    }),
+  );
+
+  router.post(
+    "/auth/forgot-password",
+    validate(forgotPasswordRequestSchema, "body"),
+    asyncHandler(async (req, res) => {
+      const { email } = req.body as ForgotPasswordRequest;
+
+      const otp = await authService.requestPasswordReset(email);
+      if (otp) {
+        // The project sends no real email; the console is the OTP's only
+        // delivery channel, so this must not be suppressed by log-level config.
+        console.log(`[password-reset] OTP for ${email}: ${otp}`);
+      }
+
+      const body: AuthAckResponse = {
+        message: "If that email is registered, a password reset code has been sent.",
+      };
+      res.status(200).json(body);
+    }),
+  );
+
+  router.post(
+    "/auth/reset-password",
+    validate(resetPasswordRequestSchema, "body"),
+    asyncHandler(async (req, res) => {
+      const { email, otp, newPassword } = req.body as ResetPasswordRequest;
+
+      await authService.resetPassword(email, otp, newPassword);
+
+      const body: AuthAckResponse = { message: "Password reset successful." };
+      res.status(200).json(body);
     }),
   );
 
