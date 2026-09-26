@@ -47,6 +47,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma Client
+        run: pnpm --filter @note-taking-app/db exec prisma generate
+
+      - name: Apply database migrations
+        run: pnpm --filter @note-taking-app/db exec prisma migrate deploy
+
       - name: Build
         run: pnpm build
 
