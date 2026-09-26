@@ -1,0 +1,11 @@
+**/dist
+**/build
+**/node_modules
+**/coverage
+**/generated
+pnpm-lock.yaml
+
+# Pre-existing tooling/docs, not part of this change's source code
+.claude/
+CLAUDE.md
+openspec/
