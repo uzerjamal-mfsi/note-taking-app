@@ -1,6 +1,12 @@
 import type { Request, Response } from "express";
 import type { Prisma } from "@note-taking-app/db";
-import type { CreateNoteRequest, NoteDto, UpdateNoteRequest } from "@note-taking-app/shared";
+import type {
+  CreateNoteRequest,
+  ListNotesQuery,
+  NoteDto,
+  PaginatedNotesDto,
+  UpdateNoteRequest,
+} from "@note-taking-app/shared";
 import type { NoteRecord } from "./notes-repository.js";
 import type { NotesService } from "./notes-service.js";
 
@@ -33,8 +39,24 @@ export class NotesController {
   };
 
   list = async (req: Request, res: Response): Promise<void> => {
-    const notes = await this.service.listNotes(req.user!.id);
-    res.status(200).json(notes.map(toDto));
+    const query = req.query as unknown as ListNotesQuery;
+    const { notes, total, totalPages, hasNextPage, hasPreviousPage } = await this.service.listNotes(
+      req.user!.id,
+      query,
+    );
+
+    const body: PaginatedNotesDto = {
+      data: notes.map(toDto),
+      meta: {
+        page: query.page,
+        pageSize: query.pageSize,
+        total,
+        totalPages,
+        hasNextPage,
+        hasPreviousPage,
+      },
+    };
+    res.status(200).json(body);
   };
 
   update = async (req: Request, res: Response): Promise<void> => {

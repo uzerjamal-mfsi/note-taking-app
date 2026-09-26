@@ -5,7 +5,10 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../app.js";
 import { makeTestEnv } from "../test-helpers/test-env.js";
 
-const env = makeTestEnv();
+// This file's pagination/tag-filter coverage issues more requests per test
+// file than the default rate limit allows for; raise it for this app instance
+// only (other test files keep the default 100/window).
+const env = makeTestEnv({ RATE_LIMIT_MAX: 1000 });
 const app = createApp(env, { prisma });
 
 const CONTENT = {
@@ -31,6 +34,8 @@ function authHeader(token: string) {
 }
 
 beforeEach(async () => {
+  await prisma.noteTag.deleteMany();
+  await prisma.tag.deleteMany();
   await prisma.note.deleteMany();
   await prisma.passwordResetOtp.deleteMany();
   await prisma.refreshToken.deleteMany();
@@ -164,6 +169,18 @@ describe("GET /notes/:id", () => {
 });
 
 describe("GET /notes", () => {
+  async function createNote(accessToken: string, text = "Hello world") {
+    return request(app)
+      .post("/notes")
+      .set(authHeader(accessToken))
+      .send({
+        content: {
+          type: "doc",
+          content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+        },
+      });
+  }
+
   it("lists only the caller's non-deleted notes", async () => {
     const owner = await registerUser();
     const other = await registerUser();
@@ -181,7 +198,192 @@ describe("GET /notes", () => {
     const response = await request(app).get("/notes").set(authHeader(owner.accessToken));
 
     expect(response.status).toBe(200);
-    expect(response.body.map((n: { id: string }) => n.id)).toEqual([kept.body.id]);
+    expect(response.body.data.map((n: { id: string }) => n.id)).toEqual([kept.body.id]);
+    expect(response.body.meta.total).toBe(1);
+  });
+
+  it("applies default pagination and meta when no query params are given", async () => {
+    const { accessToken } = await registerUser();
+    await createNote(accessToken, "Only note");
+
+    const response = await request(app).get("/notes").set(authHeader(accessToken));
+
+    expect(response.status).toBe(200);
+    expect(response.body.meta).toEqual({
+      page: 1,
+      pageSize: 20,
+      total: 1,
+      totalPages: 1,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    });
+  });
+
+  it("returns the remaining notes on a later page", async () => {
+    const { accessToken } = await registerUser();
+    for (let i = 0; i < 3; i += 1) {
+      await createNote(accessToken, `Note ${i}`);
+    }
+
+    const response = await request(app)
+      .get("/notes?page=2&pageSize=2")
+      .set(authHeader(accessToken));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.meta).toEqual({
+      page: 2,
+      pageSize: 2,
+      total: 3,
+      totalPages: 2,
+      hasNextPage: false,
+      hasPreviousPage: true,
+    });
+  });
+
+  it("returns an empty page and the correct total for a page past the end", async () => {
+    const { accessToken } = await registerUser();
+    await createNote(accessToken);
+
+    const response = await request(app)
+      .get("/notes?page=3&pageSize=20")
+      .set(authHeader(accessToken));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+    expect(response.body.meta.total).toBe(1);
+  });
+
+  it("sorts by createdAt ascending when requested", async () => {
+    const { accessToken } = await registerUser();
+    const first = await createNote(accessToken, "First");
+    const second = await createNote(accessToken, "Second");
+
+    const response = await request(app)
+      .get("/notes?sortBy=createdAt&sortDir=asc")
+      .set(authHeader(accessToken));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((n: { id: string }) => n.id)).toEqual([
+      first.body.id,
+      second.body.id,
+    ]);
+  });
+
+  it("orders tied sort values deterministically and stably across requests", async () => {
+    const { accessToken, userId } = await registerUser();
+    const created = [];
+    for (let i = 0; i < 3; i += 1) {
+      created.push((await createNote(accessToken, `Note ${i}`)).body.id as string);
+    }
+    await prisma.note.updateMany({ where: { userId }, data: { updatedAt: new Date() } });
+
+    const first = await request(app).get("/notes").set(authHeader(accessToken));
+    const second = await request(app).get("/notes").set(authHeader(accessToken));
+
+    const expectedOrder = [...created].sort().reverse();
+    expect(first.body.data.map((n: { id: string }) => n.id)).toEqual(expectedOrder);
+    expect(second.body.data.map((n: { id: string }) => n.id)).toEqual(expectedOrder);
+  });
+
+  it("filters by a single tag", async () => {
+    const { accessToken, userId } = await registerUser();
+    const tagged = await createNote(accessToken, "Tagged");
+    await createNote(accessToken, "Untagged");
+    const tag = await prisma.tag.create({ data: { userId, name: "work" } });
+    await prisma.noteTag.create({ data: { noteId: tagged.body.id, tagId: tag.id } });
+
+    const response = await request(app).get("/notes?tags=work").set(authHeader(accessToken));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((n: { id: string }) => n.id)).toEqual([tagged.body.id]);
+  });
+
+  it("filters by multiple tags using OR", async () => {
+    const { accessToken, userId } = await registerUser();
+    const workNote = await createNote(accessToken, "Work");
+    const personalNote = await createNote(accessToken, "Personal");
+    await createNote(accessToken, "Neither");
+    const workTag = await prisma.tag.create({ data: { userId, name: "work" } });
+    const personalTag = await prisma.tag.create({ data: { userId, name: "personal" } });
+    await prisma.noteTag.create({ data: { noteId: workNote.body.id, tagId: workTag.id } });
+    await prisma.noteTag.create({ data: { noteId: personalNote.body.id, tagId: personalTag.id } });
+
+    const response = await request(app)
+      .get("/notes?tags=work,personal")
+      .set(authHeader(accessToken));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((n: { id: string }) => n.id).sort()).toEqual(
+      [workNote.body.id, personalNote.body.id].sort(),
+    );
+  });
+
+  it("matches tags case-insensitively", async () => {
+    const { accessToken, userId } = await registerUser();
+    const note = await createNote(accessToken, "Note");
+    const tag = await prisma.tag.create({ data: { userId, name: "work" } });
+    await prisma.noteTag.create({ data: { noteId: note.body.id, tagId: tag.id } });
+
+    const response = await request(app).get("/notes?tags=Work").set(authHeader(accessToken));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((n: { id: string }) => n.id)).toEqual([note.body.id]);
+  });
+
+  it("trims tag names and drops blank entries", async () => {
+    const { accessToken, userId } = await registerUser();
+    const workNote = await createNote(accessToken, "Work");
+    const personalNote = await createNote(accessToken, "Personal");
+    const workTag = await prisma.tag.create({ data: { userId, name: "work" } });
+    const personalTag = await prisma.tag.create({ data: { userId, name: "personal" } });
+    await prisma.noteTag.create({ data: { noteId: workNote.body.id, tagId: workTag.id } });
+    await prisma.noteTag.create({ data: { noteId: personalNote.body.id, tagId: personalTag.id } });
+
+    const response = await request(app)
+      .get("/notes?tags=%20work%20,,personal")
+      .set(authHeader(accessToken));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((n: { id: string }) => n.id).sort()).toEqual(
+      [workNote.body.id, personalNote.body.id].sort(),
+    );
+  });
+
+  it("returns an empty page when no note has the requested tag", async () => {
+    const { accessToken } = await registerUser();
+    await createNote(accessToken);
+
+    const response = await request(app).get("/notes?tags=nonexistent").set(authHeader(accessToken));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+    expect(response.body.meta.total).toBe(0);
+  });
+
+  it("rejects pageSize above 100 with 422, without querying notes", async () => {
+    const { accessToken } = await registerUser();
+
+    const response = await request(app).get("/notes?pageSize=101").set(authHeader(accessToken));
+
+    expect(response.status).toBe(422);
+  });
+
+  it("rejects an invalid sortBy with 422", async () => {
+    const { accessToken } = await registerUser();
+
+    const response = await request(app).get("/notes?sortBy=title").set(authHeader(accessToken));
+
+    expect(response.status).toBe(422);
+  });
+
+  it("rejects more than 10 tags with 422", async () => {
+    const { accessToken } = await registerUser();
+    const tags = Array.from({ length: 11 }, (_, i) => `tag${i}`).join(",");
+
+    const response = await request(app).get(`/notes?tags=${tags}`).set(authHeader(accessToken));
+
+    expect(response.status).toBe(422);
   });
 
   it("rejects an unauthenticated request with 401", async () => {

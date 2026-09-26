@@ -57,3 +57,40 @@ export const noteDtoSchema = z.object({
   updatedAt: z.string(),
 });
 export type NoteDto = z.infer<typeof noteDtoSchema>;
+
+export const MAX_LIST_NOTES_PAGE_SIZE = 100;
+export const MAX_LIST_NOTES_TAGS = 10;
+
+export const listNotesQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(MAX_LIST_NOTES_PAGE_SIZE).default(20),
+  sortBy: z.enum(["createdAt", "updatedAt"]).default("updatedAt"),
+  sortDir: z.enum(["asc", "desc"]).default("desc"),
+  tags: z
+    .string()
+    .optional()
+    .transform((value) =>
+      value
+        ?.split(",")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0),
+    )
+    .transform((tags) => (tags && tags.length > 0 ? tags : undefined))
+    .refine((tags) => !tags || tags.length <= MAX_LIST_NOTES_TAGS, {
+      message: `tags must contain at most ${MAX_LIST_NOTES_TAGS} entries`,
+    }),
+});
+export type ListNotesQuery = z.infer<typeof listNotesQuerySchema>;
+
+export const paginatedNotesDtoSchema = z.object({
+  data: z.array(noteDtoSchema),
+  meta: z.object({
+    page: z.number(),
+    pageSize: z.number(),
+    total: z.number(),
+    totalPages: z.number(),
+    hasNextPage: z.boolean(),
+    hasPreviousPage: z.boolean(),
+  }),
+});
+export type PaginatedNotesDto = z.infer<typeof paginatedNotesDtoSchema>;

@@ -1,4 +1,5 @@
 import type { Prisma } from "@note-taking-app/db";
+import type { ListNotesQuery } from "@note-taking-app/shared";
 import { AppError } from "../errors/app-error.js";
 import type { NoteRecord, NotesRepository } from "./notes-repository.js";
 
@@ -48,8 +49,26 @@ export class NotesService {
     return note;
   }
 
-  listNotes(userId: string): Promise<NoteRecord[]> {
-    return this.repository.listOwned(userId);
+  async listNotes(
+    userId: string,
+    query: ListNotesQuery,
+  ): Promise<{
+    notes: NoteRecord[];
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  }> {
+    const { notes, total } = await this.repository.list(userId, query);
+    const totalPages = total === 0 ? 0 : Math.ceil(total / query.pageSize);
+
+    return {
+      notes,
+      total,
+      totalPages,
+      hasNextPage: query.page < totalPages,
+      hasPreviousPage: query.page > 1,
+    };
   }
 
   async updateNote(
