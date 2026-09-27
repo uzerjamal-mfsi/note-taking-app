@@ -28,4 +28,28 @@ describe("parseEnv", () => {
   it("throws a clear error when a variable is malformed", () => {
     expect(() => parseEnv({ ...validEnv, PORT: "not-a-number" })).toThrowError(/PORT/);
   });
+
+  it("defaults the share rate limit window and max when unset", () => {
+    const env = parseEnv(validEnv);
+
+    expect(env.SHARE_RATE_LIMIT_WINDOW_MS).toBe(60 * 1000);
+    expect(env.SHARE_RATE_LIMIT_MAX).toBe(20);
+  });
+
+  it("parses explicit share rate limit values", () => {
+    const env = parseEnv({
+      ...validEnv,
+      SHARE_RATE_LIMIT_WINDOW_MS: "30000",
+      SHARE_RATE_LIMIT_MAX: "5",
+    });
+
+    expect(env.SHARE_RATE_LIMIT_WINDOW_MS).toBe(30000);
+    expect(env.SHARE_RATE_LIMIT_MAX).toBe(5);
+  });
+
+  it("throws a clear error when SHARE_RATE_LIMIT_MAX is malformed", () => {
+    expect(() => parseEnv({ ...validEnv, SHARE_RATE_LIMIT_MAX: "not-a-number" })).toThrowError(
+      /SHARE_RATE_LIMIT_MAX/,
+    );
+  });
 });

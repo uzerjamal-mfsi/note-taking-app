@@ -34,6 +34,7 @@ function authHeader(token: string) {
 }
 
 beforeEach(async () => {
+  await prisma.sharedNote.deleteMany();
   await prisma.noteTag.deleteMany();
   await prisma.tag.deleteMany();
   await prisma.note.deleteMany();
@@ -636,5 +637,38 @@ describe("DELETE /notes/:id", () => {
     const response = await request(app).delete(`/notes/${randomUUID()}`);
 
     expect(response.status).toBe(401);
+  });
+
+  it("deletes the note's active share link, and its former token 404s on the public read endpoint", async () => {
+    const { accessToken } = await registerUser();
+    const created = await request(app)
+      .post("/notes")
+      .set(authHeader(accessToken))
+      .send({ content: CONTENT });
+    const shared = await request(app)
+      .post(`/notes/${created.body.id}/share`)
+      .set(authHeader(accessToken))
+      .send({});
+    const token = shared.body.token as string;
+
+    await request(app).delete(`/notes/${created.body.id}`).set(authHeader(accessToken));
+
+    expect(await prisma.sharedNote.findUnique({ where: { token } })).toBeNull();
+    const publicResponse = await request(app).get(`/shared/${token}`);
+    expect(publicResponse.status).toBe(404);
+  });
+
+  it("deleting a note with no share link is unaffected", async () => {
+    const { accessToken } = await registerUser();
+    const created = await request(app)
+      .post("/notes")
+      .set(authHeader(accessToken))
+      .send({ content: CONTENT });
+
+    const response = await request(app)
+      .delete(`/notes/${created.body.id}`)
+      .set(authHeader(accessToken));
+
+    expect(response.status).toBe(204);
   });
 });

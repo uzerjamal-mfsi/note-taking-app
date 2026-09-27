@@ -56,6 +56,14 @@ export class NotesRepository {
     });
   }
 
+  async existsOwned(id: string, userId: string): Promise<boolean> {
+    const note = await this.prisma.note.findFirst({
+      where: { id, userId, deletedAt: null },
+      select: { id: true },
+    });
+    return note !== null;
+  }
+
   async list(
     userId: string,
     query: ListNotesQuery,
@@ -110,8 +118,12 @@ export class NotesRepository {
     });
   }
 
-  async softDeleteOwned(id: string, userId: string): Promise<boolean> {
-    const { count } = await this.prisma.note.updateMany({
+  async softDeleteOwned(
+    id: string,
+    userId: string,
+    client: PrismaClient | Prisma.TransactionClient = this.prisma,
+  ): Promise<boolean> {
+    const { count } = await client.note.updateMany({
       where: { id, userId, deletedAt: null },
       data: { deletedAt: new Date() },
     });

@@ -10,6 +10,8 @@ export function makeTestEnv(overrides: Partial<Env> = {}): Env {
     JWT_REFRESH_SECRET: "test-refresh-secret",
     RATE_LIMIT_WINDOW_MS: 15 * 60 * 1000,
     RATE_LIMIT_MAX: 100,
+    SHARE_RATE_LIMIT_WINDOW_MS: 60 * 1000,
+    SHARE_RATE_LIMIT_MAX: 20,
     ...overrides,
   };
 }

@@ -36,8 +36,9 @@ model Note {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  user User      @relation(fields: [userId], references: [id])
-  tags NoteTag[]
+  user       User        @relation(fields: [userId], references: [id])
+  tags       NoteTag[]
+  sharedNote SharedNote?
 
   // Generated (STORED) tsvector column — `setweight(to_tsvector(title), 'A')
   // || setweight(to_tsvector(searchText), 'B')` — added by migration
@@ -100,6 +101,17 @@ model NoteTag {
 
   @@id([noteId, tagId])
   @@index([tagId])
+}
+
+model SharedNote {
+  id        String    @id @default(uuid())
+  noteId    String    @unique
+  token     String    @unique
+  viewCount Int       @default(0)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
 }
 
 model PasswordResetOtp {

@@ -164,12 +164,26 @@ function makeRepository(): NotesRepository {
   } as unknown as NotesRepository;
 }
 
-/** A minimal `PrismaClient` stub whose `tag.findMany` resolves to the given ids. */
-function makePrisma(ownedTagIds: string[] = []): PrismaClient {
+/**
+ * A minimal `PrismaClient` stub whose `tag.findMany` resolves to the given
+ * ids, and whose `$transaction` runs its callback against a `tx` stub -
+ * `sharedNote.deleteMany` is a no-op spy by default. `deleteNote` passes this
+ * same `tx` through to `repository.softDeleteOwned`, so it carries no
+ * `note` model of its own.
+ */
+function makePrisma(
+  ownedTagIds: string[] = [],
+  tx: {
+    sharedNote: { deleteMany: ReturnType<typeof vi.fn> };
+  } = {
+    sharedNote: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+  },
+): PrismaClient {
   return {
     tag: {
       findMany: vi.fn().mockResolvedValue(ownedTagIds.map((id) => ({ id }))),
     },
+    $transaction: vi.fn((callback: (tx: unknown) => unknown) => callback(tx)),
   } as unknown as PrismaClient;
 }
 
@@ -246,15 +260,39 @@ describe("NotesService", () => {
     });
   });
 
-  it("deleteNote throws NOTE_NOT_FOUND (404) when the repository reports no match", async () => {
+  it("deleteNote throws NOTE_NOT_FOUND (404) when the soft-delete matches nothing", async () => {
     const repository = makeRepository();
     vi.mocked(repository.softDeleteOwned).mockResolvedValue(false);
-    const service = new NotesService(repository, makePrisma());
+    const tx = { sharedNote: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) } };
+    const service = new NotesService(repository, makePrisma([], tx));
 
     await expect(service.deleteNote("note-1", "user-1")).rejects.toMatchObject({
       code: "NOTE_NOT_FOUND",
       status: 404,
     });
+    expect(repository.softDeleteOwned).toHaveBeenCalledWith("note-1", "user-1", tx);
+    expect(tx.sharedNote.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("deleteNote also deletes the note's share link, in the same transaction", async () => {
+    const repository = makeRepository();
+    vi.mocked(repository.softDeleteOwned).mockResolvedValue(true);
+    const tx = { sharedNote: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) } };
+    const service = new NotesService(repository, makePrisma([], tx));
+
+    await service.deleteNote("note-1", "user-1");
+
+    expect(repository.softDeleteOwned).toHaveBeenCalledWith("note-1", "user-1", tx);
+    expect(tx.sharedNote.deleteMany).toHaveBeenCalledWith({ where: { noteId: "note-1" } });
+  });
+
+  it("deleteNote does not error when the note has no share link", async () => {
+    const repository = makeRepository();
+    vi.mocked(repository.softDeleteOwned).mockResolvedValue(true);
+    const tx = { sharedNote: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) } };
+    const service = new NotesService(repository, makePrisma([], tx));
+
+    await expect(service.deleteNote("note-1", "user-1")).resolves.toBeUndefined();
   });
 
   describe("tag association", () => {

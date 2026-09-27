@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
+import { generateSecureToken } from "../crypto/secure-token.js";
 
 export function generateRefreshToken(): string {
-  return crypto.randomBytes(32).toString("base64url");
+  return generateSecureToken();
 }
 
 export function hashRefreshToken(rawToken: string, secret: string): string {

@@ -153,7 +153,20 @@ export class NotesService {
   }
 
   async deleteNote(id: string, userId: string): Promise<void> {
-    const deleted = await this.repository.softDeleteOwned(id, userId);
+    // Soft-delete and, only if that actually applied to an owned note, drop
+    // its share link (if any) in the same transaction - a plain array-style
+    // $transaction can't skip the second write when the first matches nothing,
+    // and skipping matters: `id` is caller-supplied, so unconditionally
+    // deleting by noteId alone could remove another user's share link.
+    const deleted = await this.prisma.$transaction(async (tx) => {
+      const softDeleted = await this.repository.softDeleteOwned(id, userId, tx);
+      if (!softDeleted) {
+        return false;
+      }
+      await tx.sharedNote.deleteMany({ where: { noteId: id } });
+      return true;
+    });
+
     if (!deleted) {
       throw new AppError("NOTE_NOT_FOUND", 404, "Note not found");
     }
