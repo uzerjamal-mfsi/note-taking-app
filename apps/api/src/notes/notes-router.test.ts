@@ -62,6 +62,7 @@ describe("POST /notes", () => {
       content: CONTENT,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
+      tags: [],
     });
   });
 
@@ -96,6 +97,40 @@ describe("POST /notes", () => {
     const response = await request(app).post("/notes").send({ content: CONTENT });
 
     expect(response.status).toBe(401);
+  });
+
+  it("creates a note associated with the given tagIds and returns them as tags", async () => {
+    const { accessToken, userId } = await registerUser();
+    const work = await prisma.tag.create({ data: { userId, name: "work", color: "#FF8800" } });
+    const personal = await prisma.tag.create({
+      data: { userId, name: "personal", color: "#00FF00" },
+    });
+
+    const response = await request(app)
+      .post("/notes")
+      .set(authHeader(accessToken))
+      .send({ content: CONTENT, tagIds: [work.id, personal.id] });
+
+    expect(response.status).toBe(201);
+    expect(response.body.tags.map((t: { id: string }) => t.id).sort()).toEqual(
+      [work.id, personal.id].sort(),
+    );
+  });
+
+  it("rejects a tagId not owned by the caller with 422, and creates no note", async () => {
+    const { accessToken } = await registerUser();
+    const other = await registerUser();
+    const othersTag = await prisma.tag.create({
+      data: { userId: other.userId, name: "work", color: "#FF8800" },
+    });
+
+    const response = await request(app)
+      .post("/notes")
+      .set(authHeader(accessToken))
+      .send({ content: CONTENT, tagIds: [othersTag.id] });
+
+    expect(response.status).toBe(422);
+    expect(await prisma.note.count()).toBe(0);
   });
 });
 
@@ -487,6 +522,65 @@ describe("PATCH /notes/:id", () => {
     const response = await request(app).patch(`/notes/${randomUUID()}`).send({ content: CONTENT });
 
     expect(response.status).toBe(401);
+  });
+
+  it("replaces the note's tags with the given tagIds", async () => {
+    const { accessToken, userId } = await registerUser();
+    const work = await prisma.tag.create({ data: { userId, name: "work", color: "#FF8800" } });
+    const personal = await prisma.tag.create({
+      data: { userId, name: "personal", color: "#00FF00" },
+    });
+    const created = await request(app)
+      .post("/notes")
+      .set(authHeader(accessToken))
+      .send({ content: CONTENT, tagIds: [work.id] });
+
+    const response = await request(app)
+      .patch(`/notes/${created.body.id}`)
+      .set(authHeader(accessToken))
+      .send({ content: CONTENT, tagIds: [personal.id] });
+
+    expect(response.status).toBe(200);
+    expect(response.body.tags.map((t: { id: string }) => t.id)).toEqual([personal.id]);
+  });
+
+  it("leaves the note's tags unchanged when tagIds is omitted", async () => {
+    const { accessToken, userId } = await registerUser();
+    const work = await prisma.tag.create({ data: { userId, name: "work", color: "#FF8800" } });
+    const created = await request(app)
+      .post("/notes")
+      .set(authHeader(accessToken))
+      .send({ content: CONTENT, tagIds: [work.id] });
+    const nextContent = { type: "doc", content: [{ type: "text", text: "Updated" }] };
+
+    const response = await request(app)
+      .patch(`/notes/${created.body.id}`)
+      .set(authHeader(accessToken))
+      .send({ content: nextContent });
+
+    expect(response.status).toBe(200);
+    expect(response.body.tags.map((t: { id: string }) => t.id)).toEqual([work.id]);
+  });
+
+  it("rejects a tagId not owned by the caller with 422, and does not modify the note", async () => {
+    const { accessToken } = await registerUser();
+    const other = await registerUser();
+    const othersTag = await prisma.tag.create({
+      data: { userId: other.userId, name: "work", color: "#FF8800" },
+    });
+    const created = await request(app)
+      .post("/notes")
+      .set(authHeader(accessToken))
+      .send({ content: CONTENT });
+
+    const response = await request(app)
+      .patch(`/notes/${created.body.id}`)
+      .set(authHeader(accessToken))
+      .send({ content: CONTENT, tagIds: [othersTag.id] });
+
+    expect(response.status).toBe(422);
+    const row = await prisma.note.findUniqueOrThrow({ where: { id: created.body.id } });
+    expect(row.title).toBe(created.body.title);
   });
 });
 

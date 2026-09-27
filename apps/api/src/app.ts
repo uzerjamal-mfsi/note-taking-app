@@ -14,6 +14,7 @@ import { healthRouter } from "./routes/health.js";
 import { createDocsRouter } from "./docs/docs-router.js";
 import { createAuthRouter } from "./routes/auth-router.js";
 import { createNotesRouter } from "./notes/notes-router.js";
+import { createTagsRouter } from "./tags/tags-router.js";
 
 export interface CreateAppOptions {
   logger?: Logger;
@@ -54,6 +55,7 @@ export function createApp(env: Env, options: CreateAppOptions = {}) {
   app.use(createDocsRouter(env));
   app.use(createAuthRouter(options.prisma ?? defaultPrisma, env));
   app.use(createNotesRouter(options.prisma ?? defaultPrisma, env));
+  app.use(createTagsRouter(options.prisma ?? defaultPrisma, env));
 
   options.extraRoutes?.(app);
 
