@@ -7,6 +7,7 @@ import { NotesRepository } from "./notes-repository.js";
 const repository = new NotesRepository(prisma);
 
 const CONTENT = { type: "doc", content: [{ type: "text", text: "Hello" }] };
+const SEARCH_TEXT = "test";
 
 const DEFAULT_QUERY: ListNotesQuery = {
   page: 1,
@@ -55,7 +56,12 @@ describe("NotesRepository", () => {
   it("creates a note owned by the given userId", async () => {
     const user = await createUser();
 
-    const created = await repository.create({ userId: user.id, title: "Hello", content: CONTENT });
+    const created = await repository.create({
+      userId: user.id,
+      title: "Hello",
+      content: CONTENT,
+      searchText: SEARCH_TEXT,
+    });
 
     expect(created.title).toBe("Hello");
     const row = await prisma.note.findUniqueOrThrow({ where: { id: created.id } });
@@ -66,7 +72,12 @@ describe("NotesRepository", () => {
   it("findOwned returns the note only when id and userId match and it is not deleted", async () => {
     const owner = await createUser();
     const other = await createUser();
-    const note = await repository.create({ userId: owner.id, title: "Hello", content: CONTENT });
+    const note = await repository.create({
+      userId: owner.id,
+      title: "Hello",
+      content: CONTENT,
+      searchText: SEARCH_TEXT,
+    });
 
     expect((await repository.findOwned(note.id, owner.id))?.id).toBe(note.id);
     expect(await repository.findOwned(note.id, other.id)).toBeNull();
@@ -80,13 +91,24 @@ describe("NotesRepository", () => {
     it("returns only the given user's non-deleted notes, and the matching total", async () => {
       const owner = await createUser();
       const other = await createUser();
-      const kept = await repository.create({ userId: owner.id, title: "Keep", content: CONTENT });
+      const kept = await repository.create({
+        userId: owner.id,
+        title: "Keep",
+        content: CONTENT,
+        searchText: SEARCH_TEXT,
+      });
       const deleted = await repository.create({
         userId: owner.id,
         title: "Gone",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
       });
-      await repository.create({ userId: other.id, title: "Not mine", content: CONTENT });
+      await repository.create({
+        userId: other.id,
+        title: "Not mine",
+        content: CONTENT,
+        searchText: SEARCH_TEXT,
+      });
       await repository.softDeleteOwned(deleted.id, owner.id);
 
       const result = await repository.list(owner.id, DEFAULT_QUERY);
@@ -98,7 +120,12 @@ describe("NotesRepository", () => {
     it("applies default pagination (page 1, pageSize 20)", async () => {
       const owner = await createUser();
       for (let i = 0; i < 25; i += 1) {
-        await repository.create({ userId: owner.id, title: `Note ${i}`, content: CONTENT });
+        await repository.create({
+          userId: owner.id,
+          title: `Note ${i}`,
+          content: CONTENT,
+          searchText: SEARCH_TEXT,
+        });
       }
 
       const result = await repository.list(owner.id, DEFAULT_QUERY);
@@ -110,7 +137,12 @@ describe("NotesRepository", () => {
     it("returns the remaining notes on a later page", async () => {
       const owner = await createUser();
       for (let i = 0; i < 25; i += 1) {
-        await repository.create({ userId: owner.id, title: `Note ${i}`, content: CONTENT });
+        await repository.create({
+          userId: owner.id,
+          title: `Note ${i}`,
+          content: CONTENT,
+          searchText: SEARCH_TEXT,
+        });
       }
 
       const result = await repository.list(owner.id, { ...DEFAULT_QUERY, page: 2 });
@@ -121,7 +153,12 @@ describe("NotesRepository", () => {
 
     it("returns an empty page and the correct total for a page past the end", async () => {
       const owner = await createUser();
-      await repository.create({ userId: owner.id, title: "Only one", content: CONTENT });
+      await repository.create({
+        userId: owner.id,
+        title: "Only one",
+        content: CONTENT,
+        searchText: SEARCH_TEXT,
+      });
 
       const result = await repository.list(owner.id, { ...DEFAULT_QUERY, page: 3 });
 
@@ -131,11 +168,17 @@ describe("NotesRepository", () => {
 
     it("sorts by createdAt ascending when requested", async () => {
       const owner = await createUser();
-      const first = await repository.create({ userId: owner.id, title: "First", content: CONTENT });
+      const first = await repository.create({
+        userId: owner.id,
+        title: "First",
+        content: CONTENT,
+        searchText: SEARCH_TEXT,
+      });
       const second = await repository.create({
         userId: owner.id,
         title: "Second",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
       });
 
       const result = await repository.list(owner.id, {
@@ -156,6 +199,7 @@ describe("NotesRepository", () => {
           userId: owner.id,
           title: `Note ${i}`,
           content: CONTENT,
+          searchText: SEARCH_TEXT,
         });
         createdIds.push(note.id);
       }
@@ -177,8 +221,14 @@ describe("NotesRepository", () => {
         userId: owner.id,
         title: "Tagged",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
       });
-      await repository.create({ userId: owner.id, title: "Untagged", content: CONTENT });
+      await repository.create({
+        userId: owner.id,
+        title: "Untagged",
+        content: CONTENT,
+        searchText: SEARCH_TEXT,
+      });
       await tagNote(owner.id, tagged.id, "work");
 
       const result = await repository.list(owner.id, { ...DEFAULT_QUERY, tags: ["work"] });
@@ -193,13 +243,20 @@ describe("NotesRepository", () => {
         userId: owner.id,
         title: "Work",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
       });
       const personalNote = await repository.create({
         userId: owner.id,
         title: "Personal",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
       });
-      await repository.create({ userId: owner.id, title: "Neither", content: CONTENT });
+      await repository.create({
+        userId: owner.id,
+        title: "Neither",
+        content: CONTENT,
+        searchText: SEARCH_TEXT,
+      });
       await tagNote(owner.id, workNote.id, "work");
       await tagNote(owner.id, personalNote.id, "personal");
 
@@ -213,7 +270,12 @@ describe("NotesRepository", () => {
 
     it("matches tags case-insensitively", async () => {
       const owner = await createUser();
-      const note = await repository.create({ userId: owner.id, title: "Note", content: CONTENT });
+      const note = await repository.create({
+        userId: owner.id,
+        title: "Note",
+        content: CONTENT,
+        searchText: SEARCH_TEXT,
+      });
       await tagNote(owner.id, note.id, "work");
 
       const result = await repository.list(owner.id, { ...DEFAULT_QUERY, tags: ["Work"] });
@@ -223,7 +285,12 @@ describe("NotesRepository", () => {
 
     it("returns an empty page when no note has the requested tag", async () => {
       const owner = await createUser();
-      await repository.create({ userId: owner.id, title: "Note", content: CONTENT });
+      await repository.create({
+        userId: owner.id,
+        title: "Note",
+        content: CONTENT,
+        searchText: SEARCH_TEXT,
+      });
 
       const result = await repository.list(owner.id, { ...DEFAULT_QUERY, tags: ["nonexistent"] });
 
@@ -233,11 +300,17 @@ describe("NotesRepository", () => {
 
     it("excludes a soft-deleted note from both the page and the total", async () => {
       const owner = await createUser();
-      const kept = await repository.create({ userId: owner.id, title: "Keep", content: CONTENT });
+      const kept = await repository.create({
+        userId: owner.id,
+        title: "Keep",
+        content: CONTENT,
+        searchText: SEARCH_TEXT,
+      });
       const deleted = await repository.create({
         userId: owner.id,
         title: "Gone",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
       });
       await repository.softDeleteOwned(deleted.id, owner.id);
 
@@ -250,39 +323,118 @@ describe("NotesRepository", () => {
 
   it("updateOwned replaces title/content and returns the updated row", async () => {
     const owner = await createUser();
-    const note = await repository.create({ userId: owner.id, title: "Hello", content: CONTENT });
+    const note = await repository.create({
+      userId: owner.id,
+      title: "Hello",
+      content: CONTENT,
+      searchText: SEARCH_TEXT,
+    });
     const nextContent = { type: "doc", content: [{ type: "text", text: "Updated" }] };
 
     const updated = await repository.updateOwned(note.id, owner.id, {
       title: "Updated",
       content: nextContent,
+      searchText: "Updated",
     });
 
     expect(updated?.title).toBe("Updated");
     expect(updated?.content).toEqual(nextContent);
   });
 
+  describe("searchText / searchVector", () => {
+    async function matches(noteId: string, query: string): Promise<boolean> {
+      const rows = await prisma.$queryRaw<{ matches: boolean }[]>`
+        SELECT "searchVector" @@ websearch_to_tsquery('english', ${query}) AS matches
+        FROM "Note" WHERE id = ${noteId}
+      `;
+      return rows[0]!.matches;
+    }
+
+    it("create stores the given searchText, and Postgres derives a matching searchVector from it", async () => {
+      const owner = await createUser();
+
+      const created = await repository.create({
+        userId: owner.id,
+        title: "Grocery list",
+        content: CONTENT,
+        searchText: "Buy eggs and milk",
+      });
+
+      const row = await prisma.note.findUniqueOrThrow({ where: { id: created.id } });
+      expect(row.searchText).toBe("Buy eggs and milk");
+      expect(await matches(created.id, "eggs")).toBe(true);
+      expect(await matches(created.id, "grocery")).toBe(true); // stemmed match against title
+      expect(await matches(created.id, "zephyr")).toBe(false);
+    });
+
+    it("updateOwned recomputes searchVector when searchText changes", async () => {
+      const owner = await createUser();
+      const note = await repository.create({
+        userId: owner.id,
+        title: "Hello",
+        content: CONTENT,
+        searchText: "Hello",
+      });
+      expect(await matches(note.id, "zephyr")).toBe(false);
+
+      await repository.updateOwned(note.id, owner.id, {
+        title: "Hello",
+        content: CONTENT,
+        searchText: "Hello zephyr",
+      });
+
+      expect(await matches(note.id, "zephyr")).toBe(true);
+    });
+  });
+
   it("updateOwned returns null when the note doesn't exist, isn't owned, or is already deleted", async () => {
     const owner = await createUser();
     const other = await createUser();
-    const note = await repository.create({ userId: owner.id, title: "Hello", content: CONTENT });
-    const deleted = await repository.create({ userId: owner.id, title: "Gone", content: CONTENT });
+    const note = await repository.create({
+      userId: owner.id,
+      title: "Hello",
+      content: CONTENT,
+      searchText: SEARCH_TEXT,
+    });
+    const deleted = await repository.create({
+      userId: owner.id,
+      title: "Gone",
+      content: CONTENT,
+      searchText: SEARCH_TEXT,
+    });
     await repository.softDeleteOwned(deleted.id, owner.id);
 
     expect(
-      await repository.updateOwned(randomUUID(), owner.id, { title: "x", content: CONTENT }),
+      await repository.updateOwned(randomUUID(), owner.id, {
+        title: "x",
+        content: CONTENT,
+        searchText: SEARCH_TEXT,
+      }),
     ).toBeNull();
     expect(
-      await repository.updateOwned(note.id, other.id, { title: "x", content: CONTENT }),
+      await repository.updateOwned(note.id, other.id, {
+        title: "x",
+        content: CONTENT,
+        searchText: SEARCH_TEXT,
+      }),
     ).toBeNull();
     expect(
-      await repository.updateOwned(deleted.id, owner.id, { title: "x", content: CONTENT }),
+      await repository.updateOwned(deleted.id, owner.id, {
+        title: "x",
+        content: CONTENT,
+        searchText: SEARCH_TEXT,
+      }),
     ).toBeNull();
   });
 
   it("softDeleteOwned sets deletedAt and returns true", async () => {
     const owner = await createUser();
-    const note = await repository.create({ userId: owner.id, title: "Hello", content: CONTENT });
+    const note = await repository.create({
+      userId: owner.id,
+      title: "Hello",
+      content: CONTENT,
+      searchText: SEARCH_TEXT,
+    });
 
     const result = await repository.softDeleteOwned(note.id, owner.id);
 
@@ -294,7 +446,12 @@ describe("NotesRepository", () => {
   it("softDeleteOwned returns false when the note doesn't exist, isn't owned, or is already deleted", async () => {
     const owner = await createUser();
     const other = await createUser();
-    const note = await repository.create({ userId: owner.id, title: "Hello", content: CONTENT });
+    const note = await repository.create({
+      userId: owner.id,
+      title: "Hello",
+      content: CONTENT,
+      searchText: SEARCH_TEXT,
+    });
 
     expect(await repository.softDeleteOwned(randomUUID(), owner.id)).toBe(false);
     expect(await repository.softDeleteOwned(note.id, other.id)).toBe(false);
@@ -316,6 +473,7 @@ describe("NotesRepository", () => {
         userId: owner.id,
         title: "Hello",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
         tagIds: [work.id, personal.id],
       });
 
@@ -332,6 +490,7 @@ describe("NotesRepository", () => {
         userId: owner.id,
         title: "Hello",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
       });
 
       expect(created.tags).toEqual([]);
@@ -345,12 +504,14 @@ describe("NotesRepository", () => {
         userId: owner.id,
         title: "Hello",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
         tagIds: [work.id],
       });
 
       const updated = await repository.updateOwned(note.id, owner.id, {
         title: "Hello",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
         tagIds: [personal.id],
       });
 
@@ -364,12 +525,14 @@ describe("NotesRepository", () => {
         userId: owner.id,
         title: "Hello",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
         tagIds: [work.id],
       });
 
       const updated = await repository.updateOwned(note.id, owner.id, {
         title: "Hello",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
         tagIds: [],
       });
 
@@ -383,12 +546,14 @@ describe("NotesRepository", () => {
         userId: owner.id,
         title: "Hello",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
         tagIds: [work.id],
       });
 
       const updated = await repository.updateOwned(note.id, owner.id, {
         title: "Updated",
         content: CONTENT,
+        searchText: SEARCH_TEXT,
       });
 
       expect(updated?.tags.map((t) => t.tag.id)).toEqual([work.id]);
