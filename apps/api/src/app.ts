@@ -15,6 +15,8 @@ import { createDocsRouter } from "./docs/docs-router.js";
 import { createAuthRouter } from "./routes/auth-router.js";
 import { createNotesRouter } from "./notes/notes-router.js";
 import { createTagsRouter } from "./tags/tags-router.js";
+import { createSharingOwnerRouter } from "./sharing/sharing-owner-router.js";
+import { createSharingPublicRouter } from "./sharing/sharing-public-router.js";
 
 export interface CreateAppOptions {
   logger?: Logger;
@@ -56,6 +58,8 @@ export function createApp(env: Env, options: CreateAppOptions = {}) {
   app.use(createAuthRouter(options.prisma ?? defaultPrisma, env));
   app.use(createNotesRouter(options.prisma ?? defaultPrisma, env));
   app.use(createTagsRouter(options.prisma ?? defaultPrisma, env));
+  app.use(createSharingOwnerRouter(options.prisma ?? defaultPrisma, env));
+  app.use(createSharingPublicRouter(options.prisma ?? defaultPrisma, env));
 
   options.extraRoutes?.(app);
 
