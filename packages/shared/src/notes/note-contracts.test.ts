@@ -21,11 +21,50 @@ const VALID_DOC = {
   content: [{ type: "paragraph", content: [{ type: "text", text: "Hello" }] }],
 };
 
+const TAG_ID = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+const OTHER_TAG_ID = "3fa85f64-5717-4562-b3fc-2c963f66afa7";
+
 describe("createNoteRequestSchema", () => {
   it("accepts a valid non-empty content doc", () => {
     const result = createNoteRequestSchema.safeParse({ content: VALID_DOC });
 
     expect(result.success).toBe(true);
+  });
+
+  it("accepts an omitted tagIds", () => {
+    const result = createNoteRequestSchema.safeParse({ content: VALID_DOC });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tagIds).toBeUndefined();
+    }
+  });
+
+  it("accepts a tagIds array of UUID strings", () => {
+    const result = createNoteRequestSchema.safeParse({
+      content: VALID_DOC,
+      tagIds: [TAG_ID, OTHER_TAG_ID],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tagIds).toEqual([TAG_ID, OTHER_TAG_ID]);
+    }
+  });
+
+  it("accepts an empty tagIds array", () => {
+    const result = createNoteRequestSchema.safeParse({ content: VALID_DOC, tagIds: [] });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a tagIds entry that is not a UUID string", () => {
+    const result = createNoteRequestSchema.safeParse({
+      content: VALID_DOC,
+      tagIds: ["not-a-uuid"],
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it("rejects a payload missing content", () => {
@@ -62,6 +101,36 @@ describe("updateNoteRequestSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts an omitted tagIds", () => {
+    const result = updateNoteRequestSchema.safeParse({ content: VALID_DOC });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tagIds).toBeUndefined();
+    }
+  });
+
+  it("accepts a tagIds array of UUID strings", () => {
+    const result = updateNoteRequestSchema.safeParse({
+      content: VALID_DOC,
+      tagIds: [TAG_ID],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tagIds).toEqual([TAG_ID]);
+    }
+  });
+
+  it("rejects a tagIds entry that is not a UUID string", () => {
+    const result = updateNoteRequestSchema.safeParse({
+      content: VALID_DOC,
+      tagIds: ["not-a-uuid"],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("rejects a payload with empty content", () => {
     const result = updateNoteRequestSchema.safeParse({ content: { type: "doc", content: [] } });
 
@@ -78,13 +147,27 @@ describe("updateNoteRequestSchema", () => {
 });
 
 describe("noteDtoSchema", () => {
-  it("accepts id, title, content, createdAt, updatedAt", () => {
+  it("accepts id, title, content, createdAt, updatedAt, tags", () => {
     const result = noteDtoSchema.safeParse({
       id: "note-1",
       title: "Hello",
       content: VALID_DOC,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      tags: [{ id: TAG_ID, name: "work", color: "#FF8800" }],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an empty tags array", () => {
+    const result = noteDtoSchema.safeParse({
+      id: "note-1",
+      title: "Hello",
+      content: VALID_DOC,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: [],
     });
 
     expect(result.success).toBe(true);
@@ -93,6 +176,19 @@ describe("noteDtoSchema", () => {
   it("rejects a payload missing title", () => {
     const result = noteDtoSchema.safeParse({
       id: "note-1",
+      content: VALID_DOC,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: [],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a payload missing tags", () => {
+    const result = noteDtoSchema.safeParse({
+      id: "note-1",
+      title: "Hello",
       content: VALID_DOC,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

@@ -21,6 +21,7 @@ function toDto(note: NoteRecord): NoteDto {
     content: note.content as NoteDto["content"],
     createdAt: note.createdAt.toISOString(),
     updatedAt: note.updatedAt.toISOString(),
+    tags: note.tags.map(({ tag }) => tag),
   };
 }
 
@@ -28,8 +29,12 @@ export class NotesController {
   constructor(private readonly service: NotesService) {}
 
   create = async (req: Request, res: Response): Promise<void> => {
-    const { content } = req.body as CreateNoteRequest;
-    const note = await this.service.createNote(req.user!.id, content as Prisma.InputJsonValue);
+    const { content, tagIds } = req.body as CreateNoteRequest;
+    const note = await this.service.createNote(
+      req.user!.id,
+      content as Prisma.InputJsonValue,
+      tagIds,
+    );
     res.status(201).json(toDto(note));
   };
 
@@ -60,11 +65,12 @@ export class NotesController {
   };
 
   update = async (req: Request, res: Response): Promise<void> => {
-    const { content } = req.body as UpdateNoteRequest;
+    const { content, tagIds } = req.body as UpdateNoteRequest;
     const note = await this.service.updateNote(
       noteId(req),
       req.user!.id,
       content as Prisma.InputJsonValue,
+      tagIds,
     );
     res.status(200).json(toDto(note));
   };

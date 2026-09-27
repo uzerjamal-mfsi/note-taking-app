@@ -26,8 +26,9 @@ async function createUser() {
   });
 }
 
-// No API path creates tags or note-tag associations yet (deferred to AB-1006),
-// so tests seed them directly via Prisma.
+// These tests exercise the tag *filter* on GET /notes, not tag *creation*
+// (AB-1006 adds tag association via `tagIds` on create/update, tested
+// separately below), so they still seed tags directly via Prisma.
 async function tagNote(userId: string, noteId: string, name: string) {
   const tag = await prisma.tag.upsert({
     where: { userId_name: { userId, name } },
@@ -299,5 +300,98 @@ describe("NotesRepository", () => {
     expect(await repository.softDeleteOwned(note.id, other.id)).toBe(false);
     expect(await repository.softDeleteOwned(note.id, owner.id)).toBe(true);
     expect(await repository.softDeleteOwned(note.id, owner.id)).toBe(false);
+  });
+
+  describe("tag association", () => {
+    async function createTag(userId: string, name: string) {
+      return prisma.tag.create({ data: { userId, name, color: "#FF8800" } });
+    }
+
+    it("create associates the note with the given tagIds and returns each tag's id/name/color", async () => {
+      const owner = await createUser();
+      const work = await createTag(owner.id, "work");
+      const personal = await createTag(owner.id, "personal");
+
+      const created = await repository.create({
+        userId: owner.id,
+        title: "Hello",
+        content: CONTENT,
+        tagIds: [work.id, personal.id],
+      });
+
+      expect(created.tags.map((t) => t.tag).sort((a, b) => a.name.localeCompare(b.name))).toEqual([
+        { id: personal.id, name: "personal", color: "#FF8800" },
+        { id: work.id, name: "work", color: "#FF8800" },
+      ]);
+    });
+
+    it("create with tagIds omitted associates no tags", async () => {
+      const owner = await createUser();
+
+      const created = await repository.create({
+        userId: owner.id,
+        title: "Hello",
+        content: CONTENT,
+      });
+
+      expect(created.tags).toEqual([]);
+    });
+
+    it("updateOwned with tagIds fully replaces the note's tag associations", async () => {
+      const owner = await createUser();
+      const work = await createTag(owner.id, "work");
+      const personal = await createTag(owner.id, "personal");
+      const note = await repository.create({
+        userId: owner.id,
+        title: "Hello",
+        content: CONTENT,
+        tagIds: [work.id],
+      });
+
+      const updated = await repository.updateOwned(note.id, owner.id, {
+        title: "Hello",
+        content: CONTENT,
+        tagIds: [personal.id],
+      });
+
+      expect(updated?.tags.map((t) => t.tag.id)).toEqual([personal.id]);
+    });
+
+    it("updateOwned with an empty tagIds array clears all tag associations", async () => {
+      const owner = await createUser();
+      const work = await createTag(owner.id, "work");
+      const note = await repository.create({
+        userId: owner.id,
+        title: "Hello",
+        content: CONTENT,
+        tagIds: [work.id],
+      });
+
+      const updated = await repository.updateOwned(note.id, owner.id, {
+        title: "Hello",
+        content: CONTENT,
+        tagIds: [],
+      });
+
+      expect(updated?.tags).toEqual([]);
+    });
+
+    it("updateOwned with tagIds omitted leaves existing tag associations untouched", async () => {
+      const owner = await createUser();
+      const work = await createTag(owner.id, "work");
+      const note = await repository.create({
+        userId: owner.id,
+        title: "Hello",
+        content: CONTENT,
+        tagIds: [work.id],
+      });
+
+      const updated = await repository.updateOwned(note.id, owner.id, {
+        title: "Updated",
+        content: CONTENT,
+      });
+
+      expect(updated?.tags.map((t) => t.tag.id)).toEqual([work.id]);
+    });
   });
 });

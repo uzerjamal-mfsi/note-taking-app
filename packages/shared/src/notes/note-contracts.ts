@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { tagDtoSchema } from "../tags/tag-contracts.js";
 
 export const MAX_CONTENT_DEPTH = 50;
 
@@ -39,15 +40,24 @@ const proseMirrorDocSchema = z
     }
   });
 
+export const MAX_NOTE_TAGS = 50;
+
+const tagIdsSchema = z.array(z.string().uuid()).max(MAX_NOTE_TAGS).optional();
+
 export const createNoteRequestSchema = z.object({
   content: proseMirrorDocSchema,
+  tagIds: tagIdsSchema,
 });
 export type CreateNoteRequest = z.infer<typeof createNoteRequestSchema>;
 
 export const updateNoteRequestSchema = z.object({
   content: proseMirrorDocSchema,
+  tagIds: tagIdsSchema,
 });
 export type UpdateNoteRequest = z.infer<typeof updateNoteRequestSchema>;
+
+export const noteTagRefDtoSchema = tagDtoSchema.pick({ id: true, name: true, color: true });
+export type NoteTagRefDto = z.infer<typeof noteTagRefDtoSchema>;
 
 export const noteDtoSchema = z.object({
   id: z.string(),
@@ -55,6 +65,7 @@ export const noteDtoSchema = z.object({
   content: z.record(z.unknown()),
   createdAt: z.string(),
   updatedAt: z.string(),
+  tags: z.array(noteTagRefDtoSchema),
 });
 export type NoteDto = z.infer<typeof noteDtoSchema>;
 

@@ -1,35 +1,9 @@
-# notes-tags Specification
+# Spec Delta
 
-## Purpose
-
-Gives each user their own private set of named tags that can be associated with their notes, so notes can be filtered by tag in the notes list. This capability covers only tag identity and the note-tag association; it does not include any endpoint for creating, renaming, or assigning tags.
-
-## Requirements
-
-### Requirement: Per-user tag identity
-The system SHALL scope tags per user: a tag's name SHALL be unique for its owning user, compared case-insensitively, but the same name MAY be used independently by different users. A tag SHALL NOT be visible to, or usable by, any user other than its owner.
-
-#### Scenario: Duplicate tag name for the same user is rejected
-- **WHEN** a second tag is created for a user with a name that differs only in case from a tag that user already has (e.g. the user already has `work` and a `Work` tag is created for them)
-- **THEN** the system rejects the second tag as a duplicate and does not create it
-
-#### Scenario: Same tag name is independent across users
-- **WHEN** two different users each have a tag named `work`
-- **THEN** both tags exist independently, and neither user's tag is visible to or affected by the other's
-
-### Requirement: Note-tag association
-The system SHALL allow a note to be associated with zero or more of its owner's tags. A note SHALL only ever be associated with tags owned by the same user who owns the note. This association exists so a note can be matched by the notes list's tag filter (see the `notes` capability); it is set via the `tagIds` field on `POST /notes` and `PATCH /notes/:id` (see the `notes` capability) - there is no separate endpoint to view or change a note's tag associations directly.
-
-#### Scenario: A note may have multiple tags
-- **WHEN** a note is associated with more than one tag
-- **THEN** the note matches a tag filter request naming any one of those tags
-
-#### Scenario: A note may have no tags
-- **WHEN** a note has no tag associations
-- **THEN** the note is excluded from any request that filters by tag, and included in a request that does not filter by tag
+## ADDED Requirements
 
 ### Requirement: Create a tag
-The system SHALL allow an authenticated user to create a tag via `POST /tags` given a `name` (required, non-empty after trimming, at most 100 characters) and a `color` (required, a `#RRGGBB` hex string, stored normalized to uppercase regardless of the case submitted). The system SHALL associate the tag with the authenticated caller as its owner. `name` SHALL be unique per user, compared case-insensitively (see this capability's per-user tag identity requirement). On success, the system SHALL respond `201 Created` with the created tag, including `noteCount` equal to `0`.
+The system SHALL allow an authenticated user to create a tag via `POST /tags` given a `name` (required, non-empty after trimming, at most 100 characters) and a `color` (required, a `#RRGGBB` hex string, stored normalized to uppercase regardless of the case submitted). The system SHALL associate the tag with the authenticated caller as its owner. `name` SHALL be unique per user, compared case-insensitively (see the `notes-tags` capability's per-user tag identity requirement). On success, the system SHALL respond `201 Created` with the created tag, including `noteCount` equal to `0`.
 
 #### Scenario: Successful creation
 - **WHEN** an authenticated user submits `POST /tags` with `name` `"Work"` and `color` `"#ff8800"`, and has no existing tag named `work`
@@ -111,3 +85,16 @@ The system SHALL allow an authenticated user to delete one of their own tags via
 #### Scenario: Authorization denied - unauthenticated
 - **WHEN** a request to `DELETE /tags/:id` carries no valid access token
 - **THEN** the system responds `401 Unauthorized`
+
+## MODIFIED Requirements
+
+### Requirement: Note-tag association
+The system SHALL allow a note to be associated with zero or more of its owner's tags. A note SHALL only ever be associated with tags owned by the same user who owns the note. This association exists so a note can be matched by the notes list's tag filter (see the `notes` capability); it is set via the `tagIds` field on `POST /notes` and `PATCH /notes/:id` (see the `notes` capability) - there is no separate endpoint to view or change a note's tag associations directly.
+
+#### Scenario: A note may have multiple tags
+- **WHEN** a note is associated with more than one tag
+- **THEN** the note matches a tag filter request naming any one of those tags
+
+#### Scenario: A note may have no tags
+- **WHEN** a note has no tag associations
+- **THEN** the note is excluded from any request that filters by tag, and included in a request that does not filter by tag

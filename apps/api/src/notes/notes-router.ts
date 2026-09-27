@@ -16,7 +16,7 @@ import { NotesService } from "./notes-service.js";
 export function createNotesRouter(prisma: PrismaClient, env: Env): Router {
   const router = Router();
   const auth = requireAuth(env.JWT_ACCESS_SECRET);
-  const controller = new NotesController(new NotesService(new NotesRepository(prisma)));
+  const controller = new NotesController(new NotesService(new NotesRepository(prisma), prisma));
 
   router.post(
     "/notes",

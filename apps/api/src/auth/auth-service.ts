@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
-import { Prisma, type PrismaClient } from "@note-taking-app/db";
+import type { PrismaClient } from "@note-taking-app/db";
 import { AppError } from "../errors/app-error.js";
+import { isUniqueConstraintError } from "../errors/prisma-errors.js";
 import { normalizeEmail } from "./normalize-email.js";
 import { hashPassword, verifyPassword } from "./password.js";
 
@@ -11,10 +12,6 @@ import { hashPassword, verifyPassword } from "./password.js";
 const DUMMY_PASSWORD_HASH = "$2b$12$CwTycUXWue0Thq9StjUM0uJ8v4M2wu9Qb8ee.2rqPvz4nJMOx4T0m";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
-
-function isUniqueConstraintError(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-}
 
 function generateOtp(): string {
   return randomInt(0, 1_000_000).toString().padStart(6, "0");

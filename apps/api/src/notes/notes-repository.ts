@@ -7,6 +7,7 @@ const NOTE_SELECT = {
   content: true,
   createdAt: true,
   updatedAt: true,
+  tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
 } satisfies Prisma.NoteSelect;
 
 export type NoteRecord = Prisma.NoteGetPayload<{ select: typeof NOTE_SELECT }>;
@@ -15,11 +16,13 @@ export interface CreateNoteInput {
   userId: string;
   title: string;
   content: Prisma.InputJsonValue;
+  tagIds?: string[];
 }
 
 export interface UpdateNoteInput {
   title: string;
   content: Prisma.InputJsonValue;
+  tagIds?: string[];
 }
 
 export class NotesRepository {
@@ -27,7 +30,14 @@ export class NotesRepository {
 
   create(input: CreateNoteInput): Promise<NoteRecord> {
     return this.prisma.note.create({
-      data: { userId: input.userId, title: input.title, content: input.content },
+      data: {
+        userId: input.userId,
+        title: input.title,
+        content: input.content,
+        ...(input.tagIds && input.tagIds.length > 0
+          ? { tags: { create: input.tagIds.map((tagId) => ({ tagId })) } }
+          : {}),
+      },
       select: NOTE_SELECT,
     });
   }
@@ -70,16 +80,27 @@ export class NotesRepository {
   }
 
   async updateOwned(id: string, userId: string, data: UpdateNoteInput): Promise<NoteRecord | null> {
-    const { count } = await this.prisma.note.updateMany({
-      where: { id, userId, deletedAt: null },
-      data: { title: data.title, content: data.content },
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.note.updateMany({
+        where: { id, userId, deletedAt: null },
+        data: { title: data.title, content: data.content },
+      });
+
+      if (count === 0) {
+        return null;
+      }
+
+      if (data.tagIds !== undefined) {
+        await tx.noteTag.deleteMany({ where: { noteId: id } });
+        if (data.tagIds.length > 0) {
+          await tx.noteTag.createMany({
+            data: data.tagIds.map((tagId) => ({ noteId: id, tagId })),
+          });
+        }
+      }
+
+      return tx.note.findUnique({ where: { id }, select: NOTE_SELECT });
     });
-
-    if (count === 0) {
-      return null;
-    }
-
-    return this.prisma.note.findUnique({ where: { id }, select: NOTE_SELECT });
   }
 
   async softDeleteOwned(id: string, userId: string): Promise<boolean> {
