@@ -93,15 +93,18 @@ export const listNotesQuerySchema = z.object({
 });
 export type ListNotesQuery = z.infer<typeof listNotesQuerySchema>;
 
+export const paginationMetaSchema = z.object({
+  page: z.number(),
+  pageSize: z.number(),
+  total: z.number(),
+  totalPages: z.number(),
+  hasNextPage: z.boolean(),
+  hasPreviousPage: z.boolean(),
+});
+export type PaginationMeta = z.infer<typeof paginationMetaSchema>;
+
 export const paginatedNotesDtoSchema = z.object({
   data: z.array(noteDtoSchema),
-  meta: z.object({
-    page: z.number(),
-    pageSize: z.number(),
-    total: z.number(),
-    totalPages: z.number(),
-    hasNextPage: z.boolean(),
-    hasPreviousPage: z.boolean(),
-  }),
+  meta: paginationMetaSchema,
 });
 export type PaginatedNotesDto = z.infer<typeof paginatedNotesDtoSchema>;

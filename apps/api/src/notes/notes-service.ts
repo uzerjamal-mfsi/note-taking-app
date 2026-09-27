@@ -35,6 +35,24 @@ export function deriveTitle(content: unknown): string {
   return text.slice(0, MAX_TITLE_LENGTH);
 }
 
+/**
+ * Full-document plain-text extraction, backing `Note.searchText` (see
+ * schema.prisma). Unlike `deriveTitle`, walks every top-level node rather
+ * than just the first, joining each node's collected text with a single
+ * space so top-level blocks (paragraphs, list, headings, ...) don't run
+ * together; text within a node is concatenated exactly as `collectText`
+ * already does for `deriveTitle` (no smart handling of hard breaks, etc.).
+ */
+export function extractSearchText(content: unknown): string {
+  const doc = content as { content?: unknown[] } | null;
+  const topLevelNodes = Array.isArray(doc?.content) ? doc.content : [];
+
+  return topLevelNodes
+    .map((node) => collectText(node).trim())
+    .filter((text) => text.length > 0)
+    .join(" ");
+}
+
 export class NotesService {
   constructor(
     private readonly repository: NotesRepository,
@@ -62,7 +80,13 @@ export class NotesService {
   ): Promise<NoteRecord> {
     await this.assertOwnsTags(userId, tagIds);
     try {
-      return await this.repository.create({ userId, title: deriveTitle(content), content, tagIds });
+      return await this.repository.create({
+        userId,
+        title: deriveTitle(content),
+        content,
+        searchText: extractSearchText(content),
+        tagIds,
+      });
     } catch (error) {
       if (isForeignKeyConstraintError(error)) {
         throw new AppError("TAG_NOT_FOUND", 422, "One or more tags were not found");
@@ -113,6 +137,7 @@ export class NotesService {
       updated = await this.repository.updateOwned(id, userId, {
         title: deriveTitle(content),
         content,
+        searchText: extractSearchText(content),
         tagIds,
       });
     } catch (error) {

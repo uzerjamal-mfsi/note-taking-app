@@ -27,12 +27,29 @@ model Note {
   userId    String
   title     String
   content   Json
-  deletedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  // Full-document plain-text extraction of `content`, computed and written by
+  // `NotesService.createNote`/`updateNote` (see `extractSearchText` in
+  // apps/api/src/notes/notes-service.ts) at the same time as `title`. Backs
+  // `searchVector` below; never read or written anywhere else.
+  searchText String    @default("")
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   user User      @relation(fields: [userId], references: [id])
   tags NoteTag[]
+
+  // Generated (STORED) tsvector column — `setweight(to_tsvector(title), 'A')
+  // || setweight(to_tsvector(searchText), 'B')` — added by migration
+  // 20260927120000_add_note_search and backing full-text search (AB-1007).
+  // Prisma has no native tsvector type, so this is declared as
+  // `Unsupported(...)`; Prisma Client automatically excludes `Unsupported`
+  // fields from selection, so NotesRepository never needs to handle it. The
+  // GIN index on this column has no Prisma-schema representation at all (an
+  // index on an `Unsupported` field can't be declared here) and exists only
+  // in that migration's hand-written SQL — there is nothing to approximate,
+  // unlike the userId/name indexes documented below.
+  searchVector Unsupported("tsvector")?
 
   // The actual index in the database is a partial index —
   // `CREATE INDEX ... ON "Note"("userId") WHERE "deletedAt" IS NULL` — hand-edited
