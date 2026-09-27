@@ -1,13 +1,17 @@
 import type { Prisma, PrismaClient } from "@note-taking-app/db";
 import type { ListNotesQuery } from "@note-taking-app/shared";
 
+export const NOTE_TAGS_SELECT = {
+  select: { tag: { select: { id: true, name: true, color: true } } },
+} satisfies Prisma.Note$tagsArgs;
+
 const NOTE_SELECT = {
   id: true,
   title: true,
   content: true,
   createdAt: true,
   updatedAt: true,
-  tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
+  tags: NOTE_TAGS_SELECT,
 } satisfies Prisma.NoteSelect;
 
 export type NoteRecord = Prisma.NoteGetPayload<{ select: typeof NOTE_SELECT }>;
@@ -16,12 +20,14 @@ export interface CreateNoteInput {
   userId: string;
   title: string;
   content: Prisma.InputJsonValue;
+  searchText: string;
   tagIds?: string[];
 }
 
 export interface UpdateNoteInput {
   title: string;
   content: Prisma.InputJsonValue;
+  searchText: string;
   tagIds?: string[];
 }
 
@@ -34,6 +40,7 @@ export class NotesRepository {
         userId: input.userId,
         title: input.title,
         content: input.content,
+        searchText: input.searchText,
         ...(input.tagIds && input.tagIds.length > 0
           ? { tags: { create: input.tagIds.map((tagId) => ({ tagId })) } }
           : {}),
@@ -91,7 +98,7 @@ export class NotesRepository {
     return this.prisma.$transaction(async (tx) => {
       const { count } = await tx.note.updateMany({
         where: { id, userId, deletedAt: null },
-        data: { title: data.title, content: data.content },
+        data: { title: data.title, content: data.content, searchText: data.searchText },
       });
 
       if (count === 0) {

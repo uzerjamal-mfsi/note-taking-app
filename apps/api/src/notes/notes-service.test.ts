@@ -2,7 +2,7 @@ import { Prisma, type PrismaClient } from "@note-taking-app/db";
 import type { ListNotesQuery } from "@note-taking-app/shared";
 import { describe, expect, it, vi } from "vitest";
 import type { NoteRecord, NotesRepository } from "./notes-repository.js";
-import { NotesService, deriveTitle } from "./notes-service.js";
+import { NotesService, deriveTitle, extractSearchText } from "./notes-service.js";
 
 function foreignKeyConstraintError(): Prisma.PrismaClientKnownRequestError {
   return new Prisma.PrismaClientKnownRequestError("Foreign key constraint failed", {
@@ -62,6 +62,95 @@ describe("deriveTitle", () => {
     };
 
     expect(deriveTitle(content)).toBe("Untitled");
+  });
+});
+
+describe("extractSearchText", () => {
+  it("collects text across every top-level node, not just the first", () => {
+    const content = {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "First paragraph" }] },
+        { type: "paragraph", content: [{ type: "text", text: "Second paragraph" }] },
+      ],
+    };
+
+    expect(extractSearchText(content)).toBe("First paragraph Second paragraph");
+  });
+
+  it("includes text under marks (bold/italic) the same as plain text", () => {
+    const content = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Hello " },
+            { type: "text", text: "world", marks: [{ type: "bold" }] },
+          ],
+        },
+      ],
+    };
+
+    expect(extractSearchText(content)).toBe("Hello world");
+  });
+
+  it("contributes nothing for a hard break (no text, no nested content)", () => {
+    const content = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Line one" },
+            { type: "hardBreak" },
+            { type: "text", text: "Line two" },
+          ],
+        },
+      ],
+    };
+
+    expect(extractSearchText(content)).toBe("Line oneLine two");
+  });
+
+  it("recurses into nested lists", () => {
+    const content = {
+      type: "doc",
+      content: [
+        {
+          type: "bulletList",
+          content: [
+            {
+              type: "listItem",
+              content: [{ type: "paragraph", content: [{ type: "text", text: "First item" }] }],
+            },
+            {
+              type: "listItem",
+              content: [{ type: "paragraph", content: [{ type: "text", text: "Second item" }] }],
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(extractSearchText(content)).toBe("First itemSecond item");
+  });
+
+  it("skips an empty paragraph (no text) rather than inserting a blank entry", () => {
+    const content = {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "Before" }] },
+        { type: "paragraph", content: [] },
+        { type: "paragraph", content: [{ type: "text", text: "After" }] },
+      ],
+    };
+
+    expect(extractSearchText(content)).toBe("Before After");
+  });
+
+  it("returns an empty string when the document has no top-level content", () => {
+    expect(extractSearchText({ type: "doc", content: [] })).toBe("");
   });
 });
 
@@ -128,6 +217,7 @@ describe("NotesService", () => {
       userId: "user-1",
       title: "Hello",
       content: CONTENT,
+      searchText: "Hello",
       tagIds: undefined,
     });
   });
@@ -143,6 +233,7 @@ describe("NotesService", () => {
     expect(repository.updateOwned).toHaveBeenCalledWith("note-1", "user-1", {
       title: "Updated",
       content: nextContent,
+      searchText: "Updated",
       tagIds: undefined,
     });
   });
@@ -221,6 +312,7 @@ describe("NotesService", () => {
         userId: "user-1",
         title: "Hello",
         content: CONTENT,
+        searchText: "Hello",
         tagIds: ["tag-1", "tag-2"],
       });
     });
@@ -258,6 +350,7 @@ describe("NotesService", () => {
       expect(repository.updateOwned).toHaveBeenCalledWith("note-1", "user-1", {
         title: "Hello",
         content: CONTENT,
+        searchText: "Hello",
         tagIds: ["tag-1"],
       });
     });
@@ -296,6 +389,7 @@ describe("NotesService", () => {
       expect(repository.updateOwned).toHaveBeenCalledWith("note-1", "user-1", {
         title: "Hello",
         content: CONTENT,
+        searchText: "Hello",
         tagIds: [],
       });
     });
