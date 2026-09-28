@@ -15,6 +15,7 @@ import { createDocsRouter } from "./docs/docs-router.js";
 import { createAuthRouter } from "./routes/auth-router.js";
 import { createNotesRouter } from "./notes/notes-router.js";
 import { createNotesSearchRouter } from "./notes-search/notes-search-router.js";
+import { createNotesHistoryRouter } from "./notes-history/notes-history-router.js";
 import { createTagsRouter } from "./tags/tags-router.js";
 import { createSharingOwnerRouter } from "./sharing/sharing-owner-router.js";
 import { createSharingPublicRouter } from "./sharing/sharing-public-router.js";
@@ -61,6 +62,7 @@ export function createApp(env: Env, options: CreateAppOptions = {}) {
   // "search" as an :id and this route would never be reached.
   app.use(createNotesSearchRouter(options.prisma ?? defaultPrisma, env));
   app.use(createNotesRouter(options.prisma ?? defaultPrisma, env));
+  app.use(createNotesHistoryRouter(options.prisma ?? defaultPrisma, env));
   app.use(createTagsRouter(options.prisma ?? defaultPrisma, env));
   app.use(createSharingOwnerRouter(options.prisma ?? defaultPrisma, env));
   app.use(createSharingPublicRouter(options.prisma ?? defaultPrisma, env));
