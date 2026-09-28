@@ -1,18 +1,44 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router";
+import {
+  createMemoryRouter,
+  MemoryRouter,
+  RouterProvider,
+  useRoutes,
+  type RouteObject,
+} from "react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { routes } from "./router.js";
 import { RootLayout } from "./RootLayout.js";
 import { RouteErrorFallback } from "./RouteErrorFallback.js";
 import { createQueryClient } from "../lib/query-client.js";
+import { useSessionStore } from "../store/session-store.js";
+
+afterEach(() => {
+  useSessionStore.setState({ status: "idle", user: null, accessToken: null });
+});
+
+// Rendered via the declarative `useRoutes` API (not `createMemoryRouter`/`RouterProvider`):
+// the data-router's navigation/fetcher machinery constructs a `Request` with an `AbortSignal`
+// that jsdom's `AbortController` polyfill produces but undici's `instanceof` check rejects,
+// an environment-only incompatibility unrelated to this app's code. `useRoutes` renders the
+// exact same route tree without exercising that code path.
+function AppRoutes() {
+  return useRoutes(routes);
+}
 
 describe("root layout", () => {
-  it("renders the layout at /", () => {
-    const router = createMemoryRouter(routes, { initialEntries: ["/"] });
+  it("renders the layout at / for an authenticated visitor", () => {
+    useSessionStore.setState({
+      status: "authenticated",
+      user: { id: "user-1", name: "Ada Lovelace", email: "ada@example.com" },
+      accessToken: "token",
+    });
     render(
       <QueryClientProvider client={createQueryClient()}>
-        <RouterProvider router={router} />
+        <MemoryRouter initialEntries={["/"]}>
+          <AppRoutes />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
 
@@ -23,8 +49,11 @@ describe("root layout", () => {
 
 describe("not-found page", () => {
   it("renders instead of a blank screen for an undefined path", () => {
-    const router = createMemoryRouter(routes, { initialEntries: ["/this-does-not-exist"] });
-    render(<RouterProvider router={router} />);
+    render(
+      <MemoryRouter initialEntries={["/this-does-not-exist"]}>
+        <AppRoutes />
+      </MemoryRouter>,
+    );
 
     expect(screen.getByText(/page not found/i)).toBeInTheDocument();
   });
