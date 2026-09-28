@@ -1,3 +1,4 @@
+import { lazy } from "react";
 import type { RouteObject } from "react-router";
 import { createBrowserRouter } from "react-router";
 import { RootLayout } from "./RootLayout.js";
@@ -11,6 +12,13 @@ import { ForgotPasswordPage } from "./ForgotPasswordPage.js";
 import { ResetPasswordPage } from "./ResetPasswordPage.js";
 import { NotesListPage } from "../features/notes/components/NotesListPage.js";
 
+// Code-split: TipTap/ProseMirror (~860kb) is only needed once a note is opened.
+const NoteEditorPage = lazy(() =>
+  import("../features/notes/components/NoteEditorPage.js").then((m) => ({
+    default: m.NoteEditorPage,
+  })),
+);
+
 export const routes: RouteObject[] = [
   {
     path: "/",
@@ -19,7 +27,10 @@ export const routes: RouteObject[] = [
     children: [
       {
         Component: RequireAuth,
-        children: [{ index: true, Component: NotesListPage }],
+        children: [
+          { index: true, Component: NotesListPage },
+          { path: "notes/:noteId", Component: NoteEditorPage },
+        ],
       },
       {
         Component: RequireGuest,

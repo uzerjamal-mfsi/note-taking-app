@@ -3,6 +3,7 @@ import { useNotesListParams } from "../hooks/use-notes-list-params.js";
 import { useNotesQuery } from "../hooks/use-notes-query.js";
 import { useTagsQuery } from "../../tags/hooks/use-tags-query.js";
 import { ClearFiltersButton } from "./ClearFiltersButton.js";
+import { NewNoteButton } from "./NewNoteButton.js";
 import { NoteCard } from "./NoteCard.js";
 import { NotesEmptyState } from "./NotesEmptyState.js";
 import { NotesErrorState } from "./NotesErrorState.js";
@@ -22,6 +23,7 @@ export function NotesListPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <NotesSortControl sortBy={sortBy} sortDir={sortDir} onSortChange={setSort} />
         <NotesTagFilter tags={tagsQuery.data ?? []} selectedTags={tags} onToggleTag={toggleTag} />
+        <NewNoteButton />
       </div>
 
       {notesQuery.isLoading ? <Spinner /> : null}

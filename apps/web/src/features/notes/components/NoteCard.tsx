@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import type { NoteDto } from "@note-taking-app/shared";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,27 +42,34 @@ export interface NoteCardProps {
 }
 
 export function NoteCard({ note, referenceNow }: NoteCardProps) {
+  const relativeDate = formatRelativeDate(note.updatedAt, referenceNow ?? new Date());
+  const tagsLabel =
+    note.tags.length > 0 ? `, tags: ${note.tags.map((tag) => tag.name).join(", ")}` : "";
+  const accessibleLabel = `${note.title}${tagsLabel}, updated ${relativeDate}`;
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{note.title}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {note.tags.length > 0 ? (
-          <ul className="flex flex-wrap gap-1.5" aria-label="Tags">
-            {note.tags.map((tag) => (
-              <li key={tag.id}>
-                <Badge style={{ backgroundColor: tag.color, color: readableTextColor(tag.color) }}>
-                  {tag.name}
-                </Badge>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <p className="text-sm text-muted-foreground">
-          Updated {formatRelativeDate(note.updatedAt, referenceNow ?? new Date())}
-        </p>
-      </CardContent>
-    </Card>
+    <Link to={`/notes/${note.id}`} className="block" aria-label={accessibleLabel}>
+      <Card aria-hidden="true">
+        <CardHeader>
+          <CardTitle>{note.title}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {note.tags.length > 0 ? (
+            <ul className="flex flex-wrap gap-1.5" aria-label="Tags">
+              {note.tags.map((tag) => (
+                <li key={tag.id}>
+                  <Badge
+                    style={{ backgroundColor: tag.color, color: readableTextColor(tag.color) }}
+                  >
+                    {tag.name}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="text-sm text-muted-foreground">Updated {relativeDate}</p>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }

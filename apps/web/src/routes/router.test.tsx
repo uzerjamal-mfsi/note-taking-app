@@ -40,12 +40,27 @@ const notesPageResponse = {
   },
 };
 
+const singleNoteResponse = {
+  id: "note-1",
+  title: "Grocery list",
+  content: {
+    type: "doc",
+    content: [{ type: "paragraph", content: [{ type: "text", text: "Grocery list" }] }],
+  },
+  createdAt: "2026-09-20T00:00:00.000Z",
+  updatedAt: "2026-09-27T00:00:00.000Z",
+  tags: [],
+};
+
 function stubApiFetch() {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockImplementation(async (url: string) => {
       if (url.includes("/tags")) {
         return { ok: true, status: 200, json: async () => [] };
+      }
+      if (/\/notes\/[^/?]+$/.test(url)) {
+        return { ok: true, status: 200, json: async () => singleNoteResponse };
       }
       return { ok: true, status: 200, json: async () => notesPageResponse };
     }),
@@ -126,6 +141,43 @@ describe("root layout", () => {
 
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/notes"), expect.anything());
+  });
+});
+
+describe("note editor route", () => {
+  it("renders the note editor at /notes/:noteId for an authenticated visitor", async () => {
+    useSessionStore.setState({
+      status: "authenticated",
+      user: { id: "user-1", name: "Ada Lovelace", email: "ada@example.com" },
+      accessToken: "token",
+    });
+    stubApiFetch();
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <MemoryRouter initialEntries={["/notes/note-1"]}>
+          <AppRoutes />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue("Grocery list"));
+  });
+
+  it("redirects an unauthenticated visitor away from /notes/:noteId to /login without requesting the note", () => {
+    stubApiFetch();
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <MemoryRouter initialEntries={["/notes/note-1"]}>
+          <AppRoutes />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalledWith(
+      expect.stringContaining("/notes/note-1"),
+      expect.anything(),
+    );
   });
 });
 
