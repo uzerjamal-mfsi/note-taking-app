@@ -49,8 +49,12 @@ export class NotesRepository {
     });
   }
 
-  findOwned(id: string, userId: string): Promise<NoteRecord | null> {
-    return this.prisma.note.findFirst({
+  findOwned(
+    id: string,
+    userId: string,
+    client?: Prisma.TransactionClient,
+  ): Promise<NoteRecord | null> {
+    return (client ?? this.prisma).note.findFirst({
       where: { id, userId, deletedAt: null },
       select: NOTE_SELECT,
     });
@@ -94,8 +98,18 @@ export class NotesRepository {
     return { notes, total };
   }
 
-  async updateOwned(id: string, userId: string, data: UpdateNoteInput): Promise<NoteRecord | null> {
-    return this.prisma.$transaction(async (tx) => {
+  /**
+   * When `client` is given, this participates in the caller's transaction
+   * instead of opening its own - used by NotesService.updateNote to keep the
+   * snapshot/purge step atomic with the content update.
+   */
+  async updateOwned(
+    id: string,
+    userId: string,
+    data: UpdateNoteInput,
+    client?: Prisma.TransactionClient,
+  ): Promise<NoteRecord | null> {
+    const run = async (tx: PrismaClient | Prisma.TransactionClient) => {
       const { count } = await tx.note.updateMany({
         where: { id, userId, deletedAt: null },
         data: { title: data.title, content: data.content, searchText: data.searchText },
@@ -115,7 +129,12 @@ export class NotesRepository {
       }
 
       return tx.note.findUnique({ where: { id }, select: NOTE_SELECT });
-    });
+    };
+
+    if (client) {
+      return run(client);
+    }
+    return this.prisma.$transaction(run);
   }
 
   async softDeleteOwned(

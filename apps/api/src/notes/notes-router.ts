@@ -10,13 +10,12 @@ import { asyncHandler } from "../middleware/async-handler.js";
 import { requireAuth } from "../middleware/require-auth.js";
 import { validate } from "../middleware/validate.js";
 import { NotesController } from "./notes-controller.js";
-import { NotesRepository } from "./notes-repository.js";
-import { NotesService } from "./notes-service.js";
+import { createNotesService } from "./notes-service.js";
 
 export function createNotesRouter(prisma: PrismaClient, env: Env): Router {
   const router = Router();
   const auth = requireAuth(env.JWT_ACCESS_SECRET);
-  const controller = new NotesController(new NotesService(new NotesRepository(prisma), prisma));
+  const controller = new NotesController(createNotesService(prisma));
 
   router.post(
     "/notes",

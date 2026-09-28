@@ -14,7 +14,7 @@ function noteId(req: Request): string {
   return req.params.id as string;
 }
 
-function toDto(note: NoteRecord): NoteDto {
+export function toNoteDto(note: NoteRecord): NoteDto {
   return {
     id: note.id,
     title: note.title,
@@ -35,12 +35,12 @@ export class NotesController {
       content as Prisma.InputJsonValue,
       tagIds,
     );
-    res.status(201).json(toDto(note));
+    res.status(201).json(toNoteDto(note));
   };
 
   get = async (req: Request, res: Response): Promise<void> => {
     const note = await this.service.getNote(noteId(req), req.user!.id);
-    res.status(200).json(toDto(note));
+    res.status(200).json(toNoteDto(note));
   };
 
   list = async (req: Request, res: Response): Promise<void> => {
@@ -51,7 +51,7 @@ export class NotesController {
     );
 
     const body: PaginatedNotesDto = {
-      data: notes.map(toDto),
+      data: notes.map(toNoteDto),
       meta: {
         page: query.page,
         pageSize: query.pageSize,
@@ -72,7 +72,7 @@ export class NotesController {
       content as Prisma.InputJsonValue,
       tagIds,
     );
-    res.status(200).json(toDto(note));
+    res.status(200).json(toNoteDto(note));
   };
 
   delete = async (req: Request, res: Response): Promise<void> => {
