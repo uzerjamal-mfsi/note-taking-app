@@ -16,4 +16,9 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  build: {
+    // Single-page app with no route-based code-splitting yet; the default
+    // 500kb warning threshold is otherwise tripped by Radix UI's Select primitive.
+    chunkSizeWarningLimit: 600,
+  },
 });
