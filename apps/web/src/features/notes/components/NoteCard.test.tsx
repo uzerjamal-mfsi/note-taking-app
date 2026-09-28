@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import type { NoteDto } from "@note-taking-app/shared";
 import { NoteCard } from "./NoteCard.js";
 
@@ -15,23 +16,35 @@ function makeNote(overrides: Partial<NoteDto> = {}): NoteDto {
   };
 }
 
+function renderCard(note: NoteDto, referenceNow?: Date) {
+  return render(
+    <MemoryRouter>
+      <NoteCard note={note} referenceNow={referenceNow} />
+    </MemoryRouter>,
+  );
+}
+
 describe("NoteCard", () => {
   it("renders the note's title", () => {
-    render(<NoteCard note={makeNote({ title: "Grocery list" })} />);
+    renderCard(makeNote({ title: "Grocery list" }));
 
     expect(screen.getByText("Grocery list")).toBeInTheDocument();
   });
 
+  it("renders as a link to the note's editor", () => {
+    renderCard(makeNote({ id: "note-42" }));
+
+    expect(screen.getByRole("link")).toHaveAttribute("href", "/notes/note-42");
+  });
+
   it("renders one chip per tag with the tag's color applied", () => {
-    render(
-      <NoteCard
-        note={makeNote({
-          tags: [
-            { id: "tag-1", name: "work", color: "#FF0000" },
-            { id: "tag-2", name: "urgent", color: "#00FF00" },
-          ],
-        })}
-      />,
+    renderCard(
+      makeNote({
+        tags: [
+          { id: "tag-1", name: "work", color: "#FF0000" },
+          { id: "tag-2", name: "urgent", color: "#00FF00" },
+        ],
+      }),
     );
 
     const workChip = screen.getByText("work");
@@ -46,7 +59,7 @@ describe("NoteCard", () => {
     const now = new Date("2026-09-27T00:00:00.000Z");
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
 
-    render(<NoteCard note={makeNote({ updatedAt: threeDaysAgo })} referenceNow={now} />);
+    renderCard(makeNote({ updatedAt: threeDaysAgo }), now);
 
     expect(screen.getByText(/3 days ago/i)).toBeInTheDocument();
   });

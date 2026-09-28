@@ -17,8 +17,9 @@ export default defineConfig({
     port: 5173,
   },
   build: {
-    // Single-page app with no route-based code-splitting yet; the default
-    // 500kb warning threshold is otherwise tripped by Radix UI's Select primitive.
+    // The default 500kb warning threshold is otherwise tripped by Radix UI's Select
+    // primitive. TipTap/ProseMirror (the note editor, ~860kb minified) is route-level
+    // code-split (see router.ts's lazy NoteEditorPage), so it doesn't count here.
     chunkSizeWarningLimit: 600,
   },
 });

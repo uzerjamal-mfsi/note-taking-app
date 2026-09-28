@@ -1,6 +1,7 @@
-import { useRef, type MouseEvent } from "react";
+import { Suspense, useRef, type MouseEvent } from "react";
 import { Outlet } from "react-router";
 import { LogoutButton } from "@/features/auth/components/LogoutButton";
+import { Spinner } from "@/components/Spinner";
 import { useSessionStore } from "@/store/session-store";
 
 export function RootLayout() {
@@ -22,7 +23,9 @@ export function RootLayout() {
         {isAuthenticated ? <LogoutButton /> : null}
       </nav>
       <main id="main-content" tabIndex={-1} ref={mainRef}>
-        <Outlet />
+        <Suspense fallback={<Spinner />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );
