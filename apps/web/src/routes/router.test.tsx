@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import {
   createMemoryRouter,
   MemoryRouter,
@@ -16,6 +16,7 @@ import { useSessionStore } from "../store/session-store.js";
 
 afterEach(() => {
   useSessionStore.setState({ status: "idle", user: null, accessToken: null });
+  vi.unstubAllGlobals();
 });
 
 // Rendered via the declarative `useRoutes` API (not `createMemoryRouter`/`RouterProvider`):
@@ -27,6 +28,30 @@ function AppRoutes() {
   return useRoutes(routes);
 }
 
+const notesPageResponse = {
+  data: [],
+  meta: {
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  },
+};
+
+function stubApiFetch() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes("/tags")) {
+        return { ok: true, status: 200, json: async () => [] };
+      }
+      return { ok: true, status: 200, json: async () => notesPageResponse };
+    }),
+  );
+}
+
 describe("root layout", () => {
   it("renders the layout at / for an authenticated visitor", () => {
     useSessionStore.setState({
@@ -34,6 +59,7 @@ describe("root layout", () => {
       user: { id: "user-1", name: "Ada Lovelace", email: "ada@example.com" },
       accessToken: "token",
     });
+    stubApiFetch();
     render(
       <QueryClientProvider client={createQueryClient()}>
         <MemoryRouter initialEntries={["/"]}>
@@ -44,6 +70,62 @@ describe("root layout", () => {
 
     expect(screen.getByRole("navigation")).toBeInTheDocument();
     expect(screen.getByRole("main")).toBeInTheDocument();
+  });
+
+  it("renders the notes list (not the old placeholder) for an authenticated visitor", async () => {
+    useSessionStore.setState({
+      status: "authenticated",
+      user: { id: "user-1", name: "Ada Lovelace", email: "ada@example.com" },
+      accessToken: "token",
+    });
+    stubApiFetch();
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <MemoryRouter initialEntries={["/"]}>
+          <AppRoutes />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText(/no notes yet/i)).toBeInTheDocument());
+    expect(screen.queryByText(/API status/i)).not.toBeInTheDocument();
+  });
+
+  it("reads page/sortBy/sortDir/tags from the URL and requests GET /notes with those params", async () => {
+    useSessionStore.setState({
+      status: "authenticated",
+      user: { id: "user-1", name: "Ada Lovelace", email: "ada@example.com" },
+      accessToken: "token",
+    });
+    stubApiFetch();
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <MemoryRouter initialEntries={["/?page=2&sortBy=createdAt&sortDir=asc&tags=work"]}>
+          <AppRoutes />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/\/notes\?.*page=2.*sortBy=createdAt.*sortDir=asc.*tags=work/),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("redirects an unauthenticated visitor away from / to /login without requesting notes", () => {
+    stubApiFetch();
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <MemoryRouter initialEntries={["/"]}>
+          <AppRoutes />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/notes"), expect.anything());
   });
 });
 

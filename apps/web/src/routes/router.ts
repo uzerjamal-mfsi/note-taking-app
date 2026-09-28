@@ -9,7 +9,7 @@ import { RegisterPage } from "./RegisterPage.js";
 import { LoginPage } from "./LoginPage.js";
 import { ForgotPasswordPage } from "./ForgotPasswordPage.js";
 import { ResetPasswordPage } from "./ResetPasswordPage.js";
-import { App } from "../App.js";
+import { NotesListPage } from "../features/notes/components/NotesListPage.js";
 
 export const routes: RouteObject[] = [
   {
@@ -19,7 +19,7 @@ export const routes: RouteObject[] = [
     children: [
       {
         Component: RequireAuth,
-        children: [{ index: true, Component: App }],
+        children: [{ index: true, Component: NotesListPage }],
       },
       {
         Component: RequireGuest,
