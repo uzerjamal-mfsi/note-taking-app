@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run --passWithNoTests",
+    "pretest:e2e": "node e2e/migrate.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {

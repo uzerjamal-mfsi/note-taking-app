@@ -16,7 +16,7 @@
 - Typecheck: `pnpm run typecheck` # tsc --noEmit across workspaces
 - Test: `pnpm test` # vitest (api + web)
 - Test Coverage: `pnpm test:coverage`
-- E2E: `pnpm run test:e2e` # playwright
+- E2E: `pnpm run test:e2e` # playwright; needs Postgres up (`docker compose up -d`) and `pnpm --filter @note-taking-app/web exec playwright install chromium` once. Applies migrations first (`pretest:e2e`), starts API :4000 + web :5173, report in `apps/web/playwright-report`, API console output (incl. the reset OTP) in `apps/web/e2e/.api.log`
 - DB: `pnpm run db:migrate` # prisma migrate dev (local only)
 - Spec: `openspec validate --strict`
 - Single workspace: `pnpm --filter api test` or `pnpm --filter web test`

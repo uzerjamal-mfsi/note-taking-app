@@ -10,6 +10,8 @@ export default [
       "**/node_modules/**",
       "**/.turbo/**",
       "**/coverage/**",
+      "**/playwright-report/**",
+      "**/test-results/**",
       "**/generated/**",
       "packages/db/src/generated/**",
     ],
