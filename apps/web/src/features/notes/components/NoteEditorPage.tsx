@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor, EditorContent, type JSONContent } from "@tiptap/react";
@@ -30,6 +30,7 @@ import {
 import { useTagsQuery } from "../../tags/hooks/use-tags-query.js";
 import { ShareDialog } from "../../sharing/components/ShareDialog.js";
 import { shareLinkQueryKey } from "../../sharing/hooks/use-share-link.js";
+import { HistoryDrawer } from "../../notes-history/components/HistoryDrawer.js";
 import { NoteTagSelector } from "./NoteTagSelector.js";
 
 function SaveStatusIndicator({
@@ -113,21 +114,33 @@ export function NoteEditorPage() {
     },
   });
 
+  const seedFromNote = useCallback(
+    (note: NoteDto) => {
+      if (!editor) {
+        return;
+      }
+      const { titleText: seededTitle, bodyContent } = splitNoteContent(note.content);
+      titleRef.current = seededTitle;
+      setTitleText(seededTitle);
+      setTagIds(note.tags.map((tag) => tag.id));
+      // emitUpdate=false: re-seeding must not look like a user edit and schedule an autosave.
+      editor.commands.setContent(bodyContent as unknown as JSONContent, false);
+    },
+    [editor],
+  );
+
   // Seed once per note: initial load, or navigating to a different note. A
   // background refetch of the same note (e.g. on window refocus) must NOT
   // re-seed and clobber in-progress edits - see web-notes-editor spec's
-  // "Background refetches do not overwrite in-progress edits".
+  // "Background refetches do not overwrite in-progress edits". The one exception
+  // is a successful version restore, which calls seedFromNote directly.
   useEffect(() => {
     if (!editor || !noteQuery.data || seededNoteIdRef.current === noteId) {
       return;
     }
-    const { titleText: seededTitle, bodyContent } = splitNoteContent(noteQuery.data.content);
     seededNoteIdRef.current = noteId;
-    titleRef.current = seededTitle;
-    setTitleText(seededTitle);
-    setTagIds(noteQuery.data.tags.map((tag) => tag.id));
-    editor.commands.setContent(bodyContent as unknown as JSONContent, false);
-  }, [editor, noteQuery.data, noteId]);
+    seedFromNote(noteQuery.data);
+  }, [editor, noteQuery.data, noteId, seedFromNote]);
 
   function getCurrentContent(): ProseMirrorDoc {
     const bodyContent = (editor?.getJSON() ?? {
@@ -147,6 +160,14 @@ export function NoteEditorPage() {
       setTagIds(previousTagIds);
       autosave.revertPendingTagIds(previousTagIds);
     });
+  }
+
+  function handleRestored(restoredNote: NoteDto) {
+    // Drop anything still pending so a stale timer can't overwrite the restore, then
+    // replace the editor state with the restored note.
+    autosave.cancelPendingSave();
+    autosave.revertPendingTagIds(restoredNote.tags.map((tag) => tag.id));
+    seedFromNote(restoredNote);
   }
 
   function handleTitleChange(value: string) {
@@ -202,6 +223,11 @@ export function NoteEditorPage() {
       ) : null}
       <div className="flex gap-2">
         <ShareDialog noteId={noteId} />
+        <HistoryDrawer
+          noteId={noteId}
+          onBeforeRestore={autosave.flushPending}
+          onRestored={handleRestored}
+        />
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button type="button" variant="destructive" className="self-start">

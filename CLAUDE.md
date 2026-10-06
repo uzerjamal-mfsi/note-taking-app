@@ -15,7 +15,7 @@
 - Lint: `pnpm lint --max-warnings 0` # eslint + prettier --check
 - Typecheck: `pnpm run typecheck` # tsc --noEmit across workspaces
 - Test: `pnpm test` # vitest (api + web)
-- Test Coverage: `pnpm test --coverage`
+- Test Coverage: `pnpm test:coverage`
 - E2E: `pnpm run test:e2e` # playwright
 - DB: `pnpm run db:migrate` # prisma migrate dev (local only)
 - Spec: `openspec validate --strict`
@@ -54,7 +54,7 @@
 - `openspec validate` passes cleanly against the implementation.
 - `pnpm build` passes with 0 errors and 0 warnings.
 - `pnpm lint --max-warnings 0` passes cleanly.
-- `pnpm test --coverage` passes with all green (≥80% coverage on new code).
+- `pnpm test:coverage` passes with all green (≥80% coverage on new code).
 - All HTTP status codes and error payloads strictly match API contracts.
 - No new `any`, `// @ts-ignore`, or `eslint-disable` comments.
 
