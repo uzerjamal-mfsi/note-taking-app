@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes, useNavigate } from "react-router";
 import { createQueryClient } from "../../../lib/query-client.js";
 import { deleteNote, getNote, updateNote } from "../api/notes-api.js";
 import { fetchTags } from "../../tags/api/tags-api.js";
+import { getShareLink } from "../../sharing/api/sharing-api.js";
 import { NoteEditorPage } from "./NoteEditorPage.js";
 
 vi.mock("../api/notes-api.js", () => ({
@@ -17,6 +18,13 @@ vi.mock("../../tags/api/tags-api.js", () => ({
   fetchTags: vi.fn(),
 }));
 
+vi.mock("../../sharing/api/sharing-api.js", () => ({
+  getShareLink: vi.fn(),
+  createShareLink: vi.fn(),
+  revokeShareLink: vi.fn(),
+}));
+
+const getShareLinkMock = vi.mocked(getShareLink);
 const getNoteMock = vi.mocked(getNote);
 const updateNoteMock = vi.mocked(updateNote);
 const deleteNoteMock = vi.mocked(deleteNote);
@@ -58,6 +66,8 @@ beforeEach(() => {
   deleteNoteMock.mockReset();
   fetchTagsMock.mockReset();
   fetchTagsMock.mockResolvedValue([]);
+  getShareLinkMock.mockReset();
+  getShareLinkMock.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -409,9 +419,9 @@ describe("NoteEditorPage query/editor isolation", () => {
   });
 });
 
-function renderWithHomeRoute(noteId = "note-1") {
+function renderWithHomeRoute(noteId = "note-1", client: QueryClient = createQueryClient()) {
   return render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[`/notes/${noteId}`]}>
         <Routes>
           <Route path="/" element={<p>notes list</p>} />
@@ -470,5 +480,91 @@ describe("NoteEditorPage delete", () => {
 
     await waitFor(() => expect(screen.getByText(/couldn't delete/i)).toBeInTheDocument());
     expect(screen.getByLabelText("Title")).toHaveValue("Grocery list");
+  });
+});
+
+describe("NoteEditorPage share entry point", () => {
+  it("opens the Share modal for the loaded note", async () => {
+    getNoteMock.mockResolvedValue(makeNote());
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue("Grocery list"));
+
+    await userEvent.click(screen.getByRole("button", { name: "Share" }));
+
+    expect(await screen.findByRole("dialog", { name: "Share this note" })).toBeInTheDocument();
+    expect(getShareLinkMock).toHaveBeenCalledWith("note-1");
+  });
+
+  it("renders no Share action and sends no share request while loading", () => {
+    getNoteMock.mockImplementation(() => new Promise(() => {}));
+
+    renderPage();
+
+    expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
+    expect(getShareLinkMock).not.toHaveBeenCalled();
+  });
+
+  it("renders no Share action and sends no share request when the note is not found", async () => {
+    getNoteMock.mockRejectedValue({ status: 404, code: "NOTE_NOT_FOUND", message: "nope" });
+    const noRetryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    renderPage("note-1", noRetryClient);
+
+    await waitFor(() => expect(screen.getByText(/note not found/i)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
+    expect(getShareLinkMock).not.toHaveBeenCalled();
+  });
+
+  it("renders no Share action when the note fails to load", async () => {
+    getNoteMock.mockRejectedValue({ status: 500, code: "X", message: "boom" });
+    const noRetryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    renderPage("note-1", noRetryClient);
+
+    await waitFor(() => expect(screen.getByText(/couldn't load this note/i)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
+    expect(getShareLinkMock).not.toHaveBeenCalled();
+  });
+
+  it("opening and closing the modal neither fires a pending autosave early nor changes content", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    updateNoteMock.mockResolvedValue(makeNote());
+    getNoteMock.mockResolvedValue(makeNote());
+    const u = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue("Grocery list"));
+
+    await u.clear(screen.getByLabelText("Title"));
+    await u.type(screen.getByLabelText("Title"), "Shopping list");
+    await u.click(screen.getByRole("button", { name: "Share" }));
+    await screen.findByRole("dialog", { name: "Share this note" });
+    await u.keyboard("{Escape}");
+
+    expect(updateNoteMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Title")).toHaveValue("Shopping list");
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await waitFor(() => expect(updateNoteMock).toHaveBeenCalledTimes(1));
+    const [, payload] = updateNoteMock.mock.calls[0] as [string, { content: unknown }];
+    const firstNode = (payload.content as { content: unknown[] }).content[0] as {
+      content: { text: string }[];
+    };
+    expect(firstNode.content[0]?.text).toBe("Shopping list");
+  });
+
+  it("removes the note's cached share link when the note is deleted", async () => {
+    getNoteMock.mockResolvedValue(makeNote());
+    deleteNoteMock.mockResolvedValue(undefined);
+    const client = createQueryClient();
+    client.setQueryData(["notes", "note-1", "share"], { token: "t" });
+    renderWithHomeRoute("note-1", client);
+    await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue("Grocery list"));
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete note" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(screen.getByText("notes list")).toBeInTheDocument());
+    expect(client.getQueryData(["notes", "note-1", "share"])).toBeUndefined();
   });
 });

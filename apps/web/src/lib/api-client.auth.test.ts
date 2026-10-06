@@ -46,6 +46,34 @@ describe("apiFetch - client session state", () => {
   });
 });
 
+describe("apiFetch - skipAuth", () => {
+  it("sends no Authorization header even when a token is in the session store", async () => {
+    useSessionStore.getState().setSession({ user, accessToken: "access-token-1" });
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiFetch("/shared/abc", {}, { skipAuth: true });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+
+  it("does not call /auth/refresh on a 401", async () => {
+    useSessionStore.getState().setSession({ user, accessToken: "access-token-1" });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(401, { code: "UNAUTHORIZED", message: "no" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(apiFetch("/shared/abc", {}, { skipAuth: true })).rejects.toMatchObject({
+      status: 401,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/auth/refresh"))).toBe(false);
+  });
+});
+
 describe("apiFetch - transparent access-token refresh", () => {
   it("refreshes once and retries the original request on a 401", async () => {
     useSessionStore.getState().setSession({ user, accessToken: "expired-token" });

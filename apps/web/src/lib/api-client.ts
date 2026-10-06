@@ -45,6 +45,11 @@ export interface ApiFetchOptions {
    * token, so attempting a refresh there is never correct.
    */
   skipRefresh?: boolean;
+  /**
+   * Public endpoints (e.g. GET /shared/:token): send no access token and never attempt
+   * a session refresh, since a public route never legitimately 401s for an expired session.
+   */
+  skipAuth?: boolean;
 }
 
 export async function apiFetch<T>(
@@ -52,13 +57,15 @@ export async function apiFetch<T>(
   init: RequestInit = {},
   options: ApiFetchOptions = {},
 ): Promise<T> {
-  const { accessToken } = useSessionStore.getState();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init.headers as Record<string, string> | undefined),
   };
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
+  if (!options.skipAuth) {
+    const { accessToken } = useSessionStore.getState();
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -67,7 +74,7 @@ export async function apiFetch<T>(
     credentials: init.credentials ?? "include",
   });
 
-  if (response.status === 401 && !options.skipRefresh) {
+  if (response.status === 401 && !options.skipRefresh && !options.skipAuth) {
     const refreshedToken = await refreshSession();
     if (refreshedToken) {
       return apiFetch<T>(path, init, { skipRefresh: true });

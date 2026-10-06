@@ -28,6 +28,8 @@ import {
   type ProseMirrorDoc,
 } from "../hooks/note-content-split.js";
 import { useTagsQuery } from "../../tags/hooks/use-tags-query.js";
+import { ShareDialog } from "../../sharing/components/ShareDialog.js";
+import { shareLinkQueryKey } from "../../sharing/hooks/use-share-link.js";
 import { NoteTagSelector } from "./NoteTagSelector.js";
 
 function SaveStatusIndicator({
@@ -95,6 +97,7 @@ export function NoteEditorPage() {
     mutationFn: () => deleteNote(noteId),
     onSuccess: () => {
       autosave.cancelPendingSave();
+      queryClient.removeQueries({ queryKey: shareLinkQueryKey(noteId) });
       queryClient.invalidateQueries({ queryKey: ["notes"] });
       navigate("/");
     },
@@ -197,23 +200,26 @@ export function NoteEditorPage() {
           <AlertDescription>Please try again.</AlertDescription>
         </Alert>
       ) : null}
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button type="button" variant="destructive" className="self-start">
-            Delete note
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this note?</AlertDialogTitle>
-            <AlertDialogDescription>This can&apos;t be undone from here.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteMutation.mutate()}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <div className="flex gap-2">
+        <ShareDialog noteId={noteId} />
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button type="button" variant="destructive" className="self-start">
+              Delete note
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this note?</AlertDialogTitle>
+              <AlertDialogDescription>This can&apos;t be undone from here.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => deleteMutation.mutate()}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </div>
   );
 }

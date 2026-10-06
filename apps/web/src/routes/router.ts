@@ -19,6 +19,13 @@ const NoteEditorPage = lazy(() =>
   })),
 );
 
+// Code-split for the same reason: the public viewer also embeds TipTap (read-only).
+const SharedNotePage = lazy(() =>
+  import("../features/sharing/components/SharedNotePage.js").then((m) => ({
+    default: m.SharedNotePage,
+  })),
+);
+
 export const routes: RouteObject[] = [
   {
     path: "/",
@@ -32,6 +39,8 @@ export const routes: RouteObject[] = [
           { path: "notes/:noteId", Component: NoteEditorPage },
         ],
       },
+      // Public: reachable by anyone, so deliberately outside RequireAuth and RequireGuest.
+      { path: "shared/:token", Component: SharedNotePage },
       {
         Component: RequireGuest,
         children: [
