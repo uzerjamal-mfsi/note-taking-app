@@ -23,7 +23,7 @@
 
 ## 4. CI and documentation
 
-- [ ] 4.1 Add the `e2e` job to `.github/workflows/ci.yml` (Postgres service, env, install, prisma generate, an explicit `prisma migrate deploy` step that precedes the Playwright run and its `webServer`, build, `playwright install --with-deps chromium`, `pnpm run test:e2e`, upload report/traces with `if: failure()`), and verify the workflow YAML is valid and the job passes on the pull request
+- [x] 4.1 Add the `e2e` job to `.github/workflows/ci.yml` (Postgres service, env, install, prisma generate, an explicit `prisma migrate deploy` step that precedes the Playwright run and its `webServer`, build, `playwright install --with-deps chromium`, `pnpm run test:e2e`, upload report/traces with `if: failure()`), and verify the workflow YAML is valid and the job passes on the pull request
 - [x] 4.2 Document local E2E usage (compose Postgres, migrate, build, `pnpm test:e2e`, where the report and OTP log live) in the repo README or `CLAUDE.md` Commands section, and verify the documented commands run as written from a clean checkout
 
 ## 5. Integration checks
