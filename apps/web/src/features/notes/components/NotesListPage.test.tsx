@@ -47,8 +47,43 @@ function notesPage(
   };
 }
 
-function stubFetch(notesResponseFactory: (url: string) => unknown) {
+function searchResult(overrides: Partial<{ id: string; title: string }> = {}) {
+  return {
+    id: overrides.id ?? "note-1",
+    title: overrides.title ?? "Grocery list",
+    titleMatches: [{ start: 0, end: 7 }],
+    snippet: "",
+    snippetMatches: [],
+    createdAt: "2026-09-01T00:00:00.000Z",
+    updatedAt: "2026-09-20T00:00:00.000Z",
+    tags: [],
+  };
+}
+
+function searchPage(
+  overrides: Partial<{ data: unknown[]; hasNextPage: boolean; hasPreviousPage: boolean }> = {},
+) {
+  return {
+    data: overrides.data ?? [searchResult()],
+    meta: {
+      page: 1,
+      pageSize: 20,
+      total: overrides.data?.length ?? 1,
+      totalPages: 1,
+      hasNextPage: overrides.hasNextPage ?? false,
+      hasPreviousPage: overrides.hasPreviousPage ?? false,
+    },
+  };
+}
+
+function stubFetch(
+  notesResponseFactory: (url: string) => unknown,
+  searchResponseFactory: (url: string) => unknown = () => searchPage(),
+) {
   const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+    if (url.includes("/notes/search")) {
+      return { ok: true, status: 200, json: async () => searchResponseFactory(url) };
+    }
     if (url.includes("/tags")) {
       return { ok: true, status: 200, json: async () => tags };
     }
@@ -233,5 +268,124 @@ describe("NotesListPage", () => {
     );
     const lastCallUrl = fetchMock.mock.calls.at(-1)?.[0] as string;
     expect(lastCallUrl).toContain("page=1");
+  });
+
+  it("typing a search query renders search results and hides the sort/tag controls", async () => {
+    const fetchMock = stubFetch(
+      () => notesPage(),
+      () => searchPage({ data: [searchResult({ id: "s1", title: "Grocery list" })] }),
+    );
+
+    renderPage("/");
+
+    await waitFor(() => expect(screen.getByRole("combobox")).toBeInTheDocument());
+
+    fetchMock.mockClear();
+    await userEvent.type(screen.getByLabelText(/search notes/i), "grocery");
+
+    await waitFor(
+      () =>
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.stringContaining("/notes/search?"),
+          expect.anything(),
+        ),
+      { timeout: 2000 },
+    );
+    await waitFor(() => expect(document.querySelector("mark")).not.toBeNull());
+    expect(document.querySelector("mark")?.textContent).toBe("Grocery");
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: /filter by tag/i })).not.toBeInTheDocument();
+  });
+
+  it("clearing the search restores the sort/tag controls and re-queries with the prior sort/tags, not defaults", async () => {
+    const fetchMock = stubFetch(
+      (url) => notesPage({ data: url.includes("tags=") ? [note()] : [note()] }),
+      () => searchPage(),
+    );
+
+    renderPage("/?sortBy=createdAt&sortDir=asc&tags=work&q=grocery");
+
+    await waitFor(() => expect(document.querySelector("mark")).not.toBeNull());
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+
+    fetchMock.mockClear();
+    await userEvent.click(screen.getByRole("button", { name: /clear search/i }));
+
+    await waitFor(() => expect(screen.getByRole("combobox")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /sortBy=createdAt.*sortDir=asc.*tags=work|tags=work.*sortBy=createdAt.*sortDir=asc/,
+        ),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("shows a distinct no-results state for a search that matched nothing", async () => {
+    stubFetch(
+      () => notesPage(),
+      () => searchPage({ data: [] }),
+    );
+
+    renderPage("/?q=nonexistentword");
+
+    await waitFor(() =>
+      expect(screen.getByText(/no notes matched your search/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("shows an error state when the search query fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ code: "INTERNAL_ERROR", message: "boom" }),
+      }),
+    );
+
+    renderPage("/?q=grocery", new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+
+    await waitFor(() => expect(screen.getByText(/could not be loaded/i)).toBeInTheDocument());
+  });
+
+  it("shows a loading indicator while the search query is pending", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise(() => {})),
+    );
+
+    renderPage("/?q=grocery");
+
+    expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+
+  it("wires Prev/Next to meta.hasNextPage/hasPreviousPage and advances the page while searching", async () => {
+    const fetchMock = stubFetch(
+      () => notesPage(),
+      (url) =>
+        searchPage({
+          hasNextPage: !url.includes("page=2"),
+          hasPreviousPage: url.includes("page=2"),
+        }),
+    );
+
+    renderPage("/?q=grocery");
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /previous/i })).toBeDisabled());
+    expect(screen.getByRole("button", { name: /next/i })).toBeEnabled();
+
+    fetchMock.mockClear();
+    await userEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/notes/search"),
+        expect.anything(),
+      ),
+    );
+    const lastCallUrl = fetchMock.mock.calls.at(-1)?.[0] as string;
+    expect(lastCallUrl).toContain("page=2");
   });
 });

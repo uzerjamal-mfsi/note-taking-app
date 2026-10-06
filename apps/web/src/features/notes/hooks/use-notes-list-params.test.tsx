@@ -89,4 +89,65 @@ describe("useNotesListParams", () => {
     expect(result.current.tags).toEqual([]);
     expect(result.current.page).toBe(1);
   });
+
+  it("defaults q to an empty string when the URL has no q param", () => {
+    const { result } = renderWithUrl("/");
+
+    expect(result.current.q).toBe("");
+  });
+
+  it("parses q from the URL", () => {
+    const { result } = renderWithUrl("/?q=grocery&page=2");
+
+    expect(result.current.q).toBe("grocery");
+    expect(result.current.page).toBe(2);
+  });
+
+  it("trims a whitespace-only q read from the URL down to empty", () => {
+    const { result } = renderWithUrl("/?q=%20%20");
+
+    expect(result.current.q).toBe("");
+  });
+
+  it("setQuery trims a whitespace-only value down to empty", () => {
+    const { result } = renderWithUrl("/");
+
+    act(() => result.current.setQuery("   "));
+
+    expect(result.current.q).toBe("");
+  });
+
+  it("setQuery writes q and resets page to 1", () => {
+    const { result } = renderWithUrl("/?page=3&sortBy=createdAt&sortDir=asc&tags=work");
+
+    act(() => result.current.setQuery("grocery"));
+
+    expect(result.current.q).toBe("grocery");
+    expect(result.current.page).toBe(1);
+    expect(result.current.sortBy).toBe("createdAt");
+    expect(result.current.sortDir).toBe("asc");
+    expect(result.current.tags).toEqual(["work"]);
+  });
+
+  it("setQuery('') clears q from the URL and resets page to 1", () => {
+    const { result } = renderWithUrl("/?q=grocery&page=2");
+
+    act(() => result.current.setQuery(""));
+
+    expect(result.current.q).toBe("");
+    expect(result.current.page).toBe(1);
+  });
+
+  it("reload/back-forward restore q by reading it back from the URL", () => {
+    const { result, rerender } = renderHook(() => useNotesListParams(), {
+      wrapper: ({ children }) => (
+        <MemoryRouter initialEntries={["/?q=grocery&page=2"]}>{children}</MemoryRouter>
+      ),
+    });
+
+    rerender();
+
+    expect(result.current.q).toBe("grocery");
+    expect(result.current.page).toBe(2);
+  });
 });
