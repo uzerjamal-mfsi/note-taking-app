@@ -7,6 +7,11 @@ import { createQueryClient } from "../../../lib/query-client.js";
 import { deleteNote, getNote, updateNote } from "../api/notes-api.js";
 import { fetchTags } from "../../tags/api/tags-api.js";
 import { getShareLink } from "../../sharing/api/sharing-api.js";
+import {
+  getNoteVersion,
+  listNoteVersions,
+  restoreNoteVersion,
+} from "../../notes-history/api/notes-history-api.js";
 import { NoteEditorPage } from "./NoteEditorPage.js";
 
 vi.mock("../api/notes-api.js", () => ({
@@ -24,6 +29,15 @@ vi.mock("../../sharing/api/sharing-api.js", () => ({
   revokeShareLink: vi.fn(),
 }));
 
+vi.mock("../../notes-history/api/notes-history-api.js", () => ({
+  listNoteVersions: vi.fn(),
+  getNoteVersion: vi.fn(),
+  restoreNoteVersion: vi.fn(),
+}));
+
+const listNoteVersionsMock = vi.mocked(listNoteVersions);
+const getNoteVersionMock = vi.mocked(getNoteVersion);
+const restoreNoteVersionMock = vi.mocked(restoreNoteVersion);
 const getShareLinkMock = vi.mocked(getShareLink);
 const getNoteMock = vi.mocked(getNote);
 const updateNoteMock = vi.mocked(updateNote);
@@ -566,5 +580,292 @@ describe("NoteEditorPage share entry point", () => {
 
     await waitFor(() => expect(screen.getByText("notes list")).toBeInTheDocument());
     expect(client.getQueryData(["notes", "note-1", "share"])).toBeUndefined();
+  });
+});
+describe("NoteEditorPage history entry point and restore", () => {
+  const tags = [
+    {
+      id: "tag-1",
+      name: "work",
+      color: "#FF0000",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      noteCount: 1,
+    },
+    {
+      id: "tag-2",
+      name: "personal",
+      color: "#00FF00",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      noteCount: 1,
+    },
+  ];
+  const summaries = [
+    {
+      id: "v1",
+      noteId: "note-1",
+      title: "Old title",
+      createdAt: "2026-10-04T12:00:00.000Z",
+    },
+  ];
+  const restoredNote = makeNote({
+    title: "Old title",
+    content: {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "Old title" }] },
+        { type: "paragraph", content: [{ type: "text", text: "Old body" }] },
+      ],
+    },
+    tags: [{ id: "tag-2", name: "personal", color: "#00FF00" }],
+  });
+
+  beforeEach(() => {
+    listNoteVersionsMock.mockReset();
+    getNoteVersionMock.mockReset();
+    restoreNoteVersionMock.mockReset();
+    listNoteVersionsMock.mockResolvedValue(summaries);
+    getNoteVersionMock.mockResolvedValue({
+      ...summaries[0]!,
+      content: restoredNote.content,
+    });
+    fetchTagsMock.mockResolvedValue(tags);
+  });
+
+  async function loadEditor(client: QueryClient = createQueryClient()) {
+    getNoteMock.mockResolvedValue(
+      makeNote({ tags: [{ id: "tag-1", name: "work", color: "#FF0000" }] }),
+    );
+    renderPage("note-1", client);
+    await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue("Grocery list"));
+    return client;
+  }
+
+  async function openPreview(u: ReturnType<typeof userEvent.setup>) {
+    await u.click(screen.getByRole("button", { name: "History" }));
+    await u.click(await screen.findByRole("button", { name: /Old title/ }));
+    await screen.findByRole("button", { name: "Restore" });
+  }
+
+  it("opens the History drawer for the loaded note", async () => {
+    await loadEditor();
+
+    await userEvent.click(screen.getByRole("button", { name: "History" }));
+
+    expect(await screen.findByRole("dialog", { name: "Version history" })).toBeInTheDocument();
+    expect(listNoteVersionsMock).toHaveBeenCalledWith("note-1");
+  });
+
+  it("renders no History action and sends no versions request while loading", () => {
+    getNoteMock.mockImplementation(() => new Promise(() => {}));
+
+    renderPage();
+
+    expect(screen.queryByRole("button", { name: "History" })).not.toBeInTheDocument();
+    expect(listNoteVersionsMock).not.toHaveBeenCalled();
+  });
+
+  it("renders no History action when the note is not found", async () => {
+    getNoteMock.mockRejectedValue({
+      status: 404,
+      code: "NOTE_NOT_FOUND",
+      message: "nope",
+    });
+    const noRetryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    renderPage("note-1", noRetryClient);
+
+    await waitFor(() => expect(screen.getByText(/note not found/i)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "History" })).not.toBeInTheDocument();
+    expect(listNoteVersionsMock).not.toHaveBeenCalled();
+  });
+
+  it("renders no History action when the note fails to load", async () => {
+    getNoteMock.mockRejectedValue({ status: 500, code: "X", message: "boom" });
+    const noRetryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    renderPage("note-1", noRetryClient);
+
+    await waitFor(() => expect(screen.getByText(/couldn't load this note/i)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "History" })).not.toBeInTheDocument();
+    expect(listNoteVersionsMock).not.toHaveBeenCalled();
+  });
+
+  it("opening and closing the drawer neither fires a pending autosave early nor changes content", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    updateNoteMock.mockResolvedValue(makeNote());
+    const u = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await loadEditor();
+
+    await u.clear(screen.getByLabelText("Title"));
+    await u.type(screen.getByLabelText("Title"), "Shopping list");
+    await u.click(screen.getByRole("button", { name: "History" }));
+    await screen.findByRole("dialog", { name: "Version history" });
+    await u.keyboard("{Escape}");
+
+    expect(updateNoteMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Title")).toHaveValue("Shopping list");
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await waitFor(() => expect(updateNoteMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("re-seeds the title, body and tags from a successful restore without sending an autosave", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    restoreNoteVersionMock.mockResolvedValue(restoredNote);
+    const u = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await loadEditor();
+    expect(screen.getByText("Milk")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "work" })).toHaveAttribute("aria-pressed", "true"),
+    );
+
+    await openPreview(u);
+    await u.click(screen.getByRole("button", { name: "Restore" }));
+
+    await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue("Old title"));
+    expect(screen.getByText("Old body")).toBeInTheDocument();
+    expect(screen.queryByText("Milk")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "personal" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "work" })).toHaveAttribute("aria-pressed", "false");
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(updateNoteMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves the title, body and tags unchanged when the restore fails", async () => {
+    restoreNoteVersionMock.mockRejectedValue({
+      status: 500,
+      code: "X",
+      message: "boom",
+    });
+    const u = userEvent.setup();
+    await loadEditor();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "work" })).toHaveAttribute("aria-pressed", "true"),
+    );
+
+    await openPreview(u);
+    await u.click(screen.getByRole("button", { name: "Restore" }));
+
+    expect(await screen.findByText(/couldn't restore this version/i)).toBeInTheDocument();
+    await u.keyboard("{Escape}");
+    expect(screen.getByLabelText("Title")).toHaveValue("Grocery list");
+    expect(screen.getByText("Milk")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "work" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("flushes unsaved edits with a PATCH before sending the restore request", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const calls: string[] = [];
+    updateNoteMock.mockImplementation(async () => {
+      calls.push("patch");
+      return makeNote({ title: "Shopping list" });
+    });
+    restoreNoteVersionMock.mockImplementation(async () => {
+      calls.push("restore");
+      return restoredNote;
+    });
+    const u = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await loadEditor();
+
+    await u.type(screen.getByLabelText("Title"), "!");
+    await openPreview(u);
+    await u.click(screen.getByRole("button", { name: "Restore" }));
+
+    await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue("Old title"));
+    expect(calls).toEqual(["patch", "restore"]);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(updateNoteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends no restore request and keeps unsaved edits when the flush fails", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    updateNoteMock.mockRejectedValue({
+      status: 500,
+      code: "X",
+      message: "boom",
+    });
+    const u = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await loadEditor();
+
+    await u.type(screen.getByLabelText("Title"), "!");
+    await openPreview(u);
+    await u.click(screen.getByRole("button", { name: "Restore" }));
+
+    expect(await screen.findByText(/couldn't save your latest edits/i)).toBeInTheDocument();
+    expect(restoreNoteVersionMock).not.toHaveBeenCalled();
+    await u.keyboard("{Escape}");
+    expect(screen.getByLabelText("Title")).toHaveValue("Grocery list!");
+  });
+
+  it("does not resend a pre-restore tag selection on the next autosave", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    updateNoteMock.mockResolvedValue(makeNote());
+    restoreNoteVersionMock.mockResolvedValue(restoredNote);
+    const u = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await loadEditor();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "work" })).toHaveAttribute("aria-pressed", "true"),
+    );
+
+    await u.click(screen.getByRole("button", { name: "personal" }));
+    await waitFor(() => expect(updateNoteMock).toHaveBeenCalledTimes(1));
+    await openPreview(u);
+    await u.click(screen.getByRole("button", { name: "Restore" }));
+    await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue("Old title"));
+    await u.type(screen.getByLabelText("Title"), "!");
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await waitFor(() => expect(updateNoteMock).toHaveBeenCalledTimes(2));
+    const [, payload] = updateNoteMock.mock.calls[1] as [string, { tagIds?: string[] }];
+    expect(payload.tagIds).toEqual(["tag-2"]);
+  });
+
+  it("shows the not-found state when a history 404 is followed by a 404 note refetch", async () => {
+    const noRetryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const u = userEvent.setup();
+    await loadEditor(noRetryClient);
+    listNoteVersionsMock.mockRejectedValue({
+      status: 404,
+      code: "NOTE_NOT_FOUND",
+      message: "x",
+    });
+    getNoteMock.mockRejectedValue({
+      status: 404,
+      code: "NOTE_NOT_FOUND",
+      message: "x",
+    });
+
+    await u.click(screen.getByRole("button", { name: "History" }));
+
+    expect(await screen.findByText(/note not found/i)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps the editor when a version 404 is followed by a successful note refetch", async () => {
+    const u = userEvent.setup();
+    await loadEditor();
+    getNoteVersionMock.mockRejectedValue({
+      status: 404,
+      code: "X",
+      message: "purged",
+    });
+
+    await u.click(screen.getByRole("button", { name: "History" }));
+    await u.click(await screen.findByRole("button", { name: /Old title/ }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByLabelText("Title")).toHaveValue("Grocery list");
+    expect(screen.queryByText(/note not found/i)).not.toBeInTheDocument();
   });
 });

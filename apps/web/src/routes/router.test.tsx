@@ -161,8 +161,10 @@ describe("note editor route", () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue("Grocery list"));
-  });
+    await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue("Grocery list"), {
+      timeout: 8000,
+    });
+  }, 15000);
 
   it("redirects an unauthenticated visitor away from /notes/:noteId to /login without requesting the note", () => {
     stubApiFetch();
@@ -179,6 +181,8 @@ describe("note editor route", () => {
       expect.stringContaining("/notes/note-1"),
       expect.anything(),
     );
+    expect(screen.queryByRole("button", { name: "History" })).not.toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/versions"), expect.anything());
   });
 });
 

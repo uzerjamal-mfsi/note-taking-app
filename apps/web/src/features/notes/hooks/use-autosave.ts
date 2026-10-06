@@ -27,6 +27,12 @@ export interface UseAutosaveResult {
    * autosave's own "keep unsaved edits on failure" behavior.
    */
   saveNow: (overrides?: SaveNowOverrides) => Promise<void>;
+  /**
+   * Sends any unsaved edit now and resolves once it (and any in-flight save) has settled.
+   * A no-op when nothing is dirty; rejects if the save fails, leaving the edit dirty so a
+   * later retry can resend it. Unlike saveNow(), it never resends already-saved content.
+   */
+  flushPending: () => Promise<void>;
   /** Re-attempts the most recent save after a failure. */
   retry: () => void;
   /**
@@ -36,7 +42,8 @@ export interface UseAutosaveResult {
   revertPendingTagIds: (tagIds: string[] | undefined) => void;
   /**
    * Discards any unsaved pending edit and clears dirty status, so the flush-on-unmount
-   * effect won't fire a save for a note that's already been deleted elsewhere.
+   * effect won't fire a save for a note that's already been deleted elsewhere or whose
+   * editor state was just replaced (e.g. by a version restore).
    */
   cancelPendingSave: () => void;
 }
@@ -152,6 +159,7 @@ export function useAutosave({
     }
     dirtyRef.current = false;
     pendingContentRef.current = null;
+    setStatus("idle");
   }, []);
 
   // `flush` gets a new identity whenever the underlying mutation's status
@@ -190,5 +198,13 @@ export function useAutosave({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [status, flush]);
 
-  return { status, scheduleSave, saveNow, retry, revertPendingTagIds, cancelPendingSave };
+  return {
+    status,
+    scheduleSave,
+    saveNow,
+    flushPending: flush,
+    retry,
+    revertPendingTagIds,
+    cancelPendingSave,
+  };
 }

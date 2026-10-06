@@ -219,3 +219,114 @@ describe("useAutosave", () => {
     removeSpy.mockRestore();
   });
 });
+
+describe("useAutosave flushPending and cancelPendingSave", () => {
+  it("flushPending sends the pending content immediately", async () => {
+    updateNoteMock.mockResolvedValue(note);
+    const { result } = renderAutosave();
+
+    act(() => {
+      result.current.scheduleSave(doc);
+    });
+    await act(async () => {
+      await result.current.flushPending();
+    });
+
+    expect(updateNoteMock).toHaveBeenCalledTimes(1);
+    expect(updateNoteMock).toHaveBeenCalledWith("note-1", { content: doc, tagIds: undefined });
+    expect(result.current.status).toBe("saved");
+  });
+
+  it("flushPending is a no-op when nothing is dirty", async () => {
+    const { result } = renderAutosave();
+
+    await act(async () => {
+      await result.current.flushPending();
+    });
+
+    expect(updateNoteMock).not.toHaveBeenCalled();
+  });
+
+  it("flushPending does not resend content that was already saved", async () => {
+    updateNoteMock.mockResolvedValue(note);
+    const { result } = renderAutosave();
+
+    act(() => {
+      result.current.scheduleSave(doc);
+    });
+    await flushTimers(IDLE_MS);
+    await act(async () => {
+      await result.current.flushPending();
+    });
+
+    expect(updateNoteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("flushPending rejects on failure and keeps the content dirty for a retry", async () => {
+    updateNoteMock.mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce(note);
+    const { result } = renderAutosave();
+
+    act(() => {
+      result.current.scheduleSave(doc);
+    });
+    await act(async () => {
+      await expect(result.current.flushPending()).rejects.toThrow("boom");
+    });
+    expect(result.current.status).toBe("error");
+
+    await act(async () => {
+      await result.current.flushPending();
+    });
+
+    expect(updateNoteMock).toHaveBeenCalledTimes(2);
+    expect(result.current.status).toBe("saved");
+  });
+
+  it("flushPending waits for an in-flight save before resolving", async () => {
+    let resolveSave: (value: typeof note) => void = () => {};
+    updateNoteMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    const { result } = renderAutosave();
+
+    act(() => {
+      result.current.scheduleSave(doc);
+    });
+    await flushTimers(IDLE_MS);
+    let settled = false;
+    let pending: Promise<void> = Promise.resolve();
+    act(() => {
+      pending = result.current.flushPending().then(() => {
+        settled = true;
+      });
+    });
+    await flushMicrotasks();
+    expect(settled).toBe(false);
+
+    await act(async () => {
+      resolveSave(note);
+      await pending;
+    });
+
+    expect(settled).toBe(true);
+    expect(updateNoteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancelPendingSave stops a scheduled save and resets status", async () => {
+    const { result } = renderAutosave();
+
+    act(() => {
+      result.current.scheduleSave(doc);
+    });
+    act(() => {
+      result.current.cancelPendingSave();
+    });
+    await flushTimers(IDLE_MS * 2);
+
+    expect(updateNoteMock).not.toHaveBeenCalled();
+    expect(result.current.status).toBe("idle");
+  });
+});
