@@ -17,6 +17,7 @@ import { AppError } from "../errors/app-error.js";
 import { asyncHandler } from "../middleware/async-handler.js";
 import { validate } from "../middleware/validate.js";
 import { AuthService } from "../auth/auth-service.js";
+import { normalizeEmail } from "../auth/normalize-email.js";
 import { RefreshTokenRepository } from "../auth/refresh-token-repository.js";
 import { SessionService } from "../auth/session-service.js";
 
@@ -112,7 +113,7 @@ export function createAuthRouter(prisma: PrismaClient, env: Env): Router {
       if (otp) {
         // The project sends no real email; the console is the OTP's only
         // delivery channel, so this must not be suppressed by log-level config.
-        console.log(`[password-reset] OTP for ${email}: ${otp}`);
+        console.log(`[password-reset] OTP for ${normalizeEmail(email)}: ${otp}`);
       }
 
       const body: AuthAckResponse = {

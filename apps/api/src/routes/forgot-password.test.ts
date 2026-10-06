@@ -77,6 +77,44 @@ describe("POST /auth/forgot-password", () => {
     expect(loggedOtp).not.toBeNull();
   });
 
+  it("logs exactly one line in the documented `[password-reset] OTP for <email>: <6 digits>` format", async () => {
+    await request(app).post(REGISTER_URL).send({
+      name: "Ada Lovelace",
+      email: "ada@example.com",
+      password: "supersecret",
+    });
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await request(app).post(FORGOT_PASSWORD_URL).send({ email: "Ada@Example.com" });
+
+    const resetLines = logSpy.mock.calls
+      .map((args) => args.join(" "))
+      .filter((line) => line.includes("[password-reset]"));
+    expect(resetLines).toHaveLength(1);
+    expect(resetLines[0]).toMatch(/^\[password-reset\] OTP for ada@example\.com: \d{6}$/);
+  });
+
+  it("logs no [password-reset] line for an unregistered email", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await request(app).post(FORGOT_PASSWORD_URL).send({ email: "unknown@example.com" });
+
+    expect(logSpy.mock.calls.map((args) => args.join(" ")).join("\n")).not.toContain(
+      "[password-reset]",
+    );
+  });
+
+  it("logs no [password-reset] line when the request body is invalid", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const response = await request(app).post(FORGOT_PASSWORD_URL).send({ email: "not-an-email" });
+
+    expect(response.status).toBe(422);
+    expect(logSpy.mock.calls.map((args) => args.join(" ")).join("\n")).not.toContain(
+      "[password-reset]",
+    );
+  });
+
   it("invalidates a prior unconsumed OTP when a new one is requested", async () => {
     await request(app).post(REGISTER_URL).send({
       name: "Ada Lovelace",
