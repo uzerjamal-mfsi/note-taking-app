@@ -11,11 +11,17 @@ export interface NotesListParams {
   sortBy: NotesSortBy;
   sortDir: NotesSortDir;
   tags: string[];
+  q: string;
 }
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_SORT_BY: NotesSortBy = "updatedAt";
 const DEFAULT_SORT_DIR: NotesSortDir = "desc";
+const DEFAULT_QUERY = "";
+
+function parseQuery(value: string | null): string {
+  return value === null ? DEFAULT_QUERY : value.trim();
+}
 
 function parsePage(value: string | null): number {
   if (value === null) return DEFAULT_PAGE;
@@ -49,6 +55,7 @@ export interface UseNotesListParamsResult extends NotesListParams {
   setSort: (sortBy: NotesSortBy, sortDir: NotesSortDir) => void;
   toggleTag: (tagName: string) => void;
   clearFilters: () => void;
+  setQuery: (q: string) => void;
 }
 
 export function useNotesListParams(): UseNotesListParamsResult {
@@ -58,15 +65,19 @@ export function useNotesListParams(): UseNotesListParamsResult {
   const sortBy = parseSortBy(searchParams.get("sortBy"));
   const sortDir = parseSortDir(searchParams.get("sortDir"));
   const tags = parseTags(searchParams.get("tags"));
+  const q = parseQuery(searchParams.get("q"));
 
   function writeParams(next: Partial<NotesListParams>) {
-    const merged: NotesListParams = { page, sortBy, sortDir, tags, ...next };
+    const merged: NotesListParams = { page, sortBy, sortDir, tags, q, ...next };
     const nextSearchParams = new URLSearchParams();
     nextSearchParams.set("page", String(merged.page));
     nextSearchParams.set("sortBy", merged.sortBy);
     nextSearchParams.set("sortDir", merged.sortDir);
     if (merged.tags.length > 0) {
       nextSearchParams.set("tags", merged.tags.join(","));
+    }
+    if (merged.q.length > 0) {
+      nextSearchParams.set("q", merged.q);
     }
     setSearchParams(nextSearchParams);
   }
@@ -90,5 +101,9 @@ export function useNotesListParams(): UseNotesListParamsResult {
     writeParams({ tags: [], page: DEFAULT_PAGE });
   }
 
-  return { page, sortBy, sortDir, tags, setPage, setSort, toggleTag, clearFilters };
+  function setQuery(nextQuery: string) {
+    writeParams({ q: nextQuery.trim(), page: DEFAULT_PAGE });
+  }
+
+  return { page, sortBy, sortDir, tags, q, setPage, setSort, toggleTag, clearFilters, setQuery };
 }
