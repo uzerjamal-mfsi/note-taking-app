@@ -12,6 +12,8 @@ RUN pnpm install --frozen-lockfile
 COPY packages/config packages/config
 COPY packages/shared packages/shared
 COPY apps/web apps/web
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN pnpm --filter @note-taking-app/web... build
 
 FROM base AS runner

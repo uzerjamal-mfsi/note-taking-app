@@ -1,30 +1,23 @@
 # syntax=docker/dockerfile:1
-FROM node:22-alpine AS base
+# Workspace packages (@note-taking-app/db, /shared) export raw .ts sources, so the API is run
+# with tsx rather than a compiled dist/. The Prisma CLI is kept for `migrate deploy` on start.
+FROM node:22-alpine
 WORKDIR /app
-RUN corepack enable
+RUN apk add --no-cache openssl && corepack enable
 
-FROM base AS builder
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/config/package.json packages/config/
 COPY packages/shared/package.json packages/shared/
 COPY packages/db/package.json packages/db/
 COPY apps/api/package.json apps/api/
-RUN pnpm install --frozen-lockfile
+RUN HUSKY=0 pnpm install --frozen-lockfile
+
 COPY packages/config packages/config
 COPY packages/shared packages/shared
 COPY packages/db packages/db
 COPY apps/api apps/api
-RUN pnpm --filter @note-taking-app/api... build
+RUN pnpm --filter @note-taking-app/db run prisma:generate
 
-FROM base AS runner
 ENV NODE_ENV=production
-COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-lock.yaml /app/package.json ./
-COPY --from=builder /app/packages/config/package.json packages/config/
-COPY --from=builder /app/packages/shared/package.json packages/shared/
-COPY --from=builder /app/packages/db/package.json packages/db/
-COPY --from=builder /app/apps/api/package.json apps/api/
-RUN pnpm install --frozen-lockfile --prod
-COPY --from=builder /app/apps/api/dist apps/api/dist
-
 EXPOSE 4000
-CMD ["node", "apps/api/dist/server.js"]
+CMD ["sh", "-c", "pnpm --filter @note-taking-app/db exec prisma migrate deploy && pnpm --filter @note-taking-app/api exec tsx src/server.ts"]
