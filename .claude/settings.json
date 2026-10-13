@@ -10,24 +10,48 @@
       "Bash(npx prettier:*)",
       "Bash(npx eslint:*)",
       "Bash(openspec:*)",
-      "Bash(git status)", "Bash(git diff:*)", "Bash(git add:*)", "Bash(git commit:*)"
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm run lint:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm run typecheck:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm run test:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm run build:*)",
+      "Bash(pnpm run validate:workflow)",
+      "Bash(pnpm --filter:*)",
+      "Bash(pnpm exec vitest:*)",
+      "Bash(pnpm exec prettier:*)",
+      "Bash(pnpm exec eslint:*)",
+      "Bash(pnpm exec openspec:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "ask": [
       "Bash(npm install:*)",
       "Bash(npm uninstall:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm remove:*)",
       "Bash(git push:*)",
-      "Bash(npx prisma migrate:*)"
+      "Bash(npx prisma migrate:*)",
+      "Bash(pnpm run db:migrate:*)"
     ],
     "deny": [
       "Read(./.env*)",
       "Read(./**/.env*)",
       "Read(./secrets/**)",
-      "Bash(curl:*)", "Bash(wget:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
       "Bash(git push --force:*)",
       "Bash(rm -rf:*)",
       "Bash(psql:*)",
       "Bash(npx prisma migrate reset:*)",
-      "Bash(npx prisma db push:*)"
+      "Bash(npx prisma db push:*)",
+      "Bash(pnpm exec prisma migrate reset:*)",
+      "Bash(pnpm exec prisma db push:*)"
     ]
   },
   "hooks": {
@@ -41,11 +65,15 @@
       {
         "matcher": "Bash",
         "hooks": [{ "type": "command", "command": "./.claude/hooks/block-dangerous.sh" }]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{ "type": "command", "command": "./.claude/hooks/spec-guard.sh" }]
       }
     ],
     "Stop": [
       {
-        "hooks": [{ "type": "command", "command": "./.claude/hooks/typecheck-and-test.sh" }]
+        "hooks": [{ "type": "command", "command": "./.claude/hooks/stop-check.sh" }]
       }
     ]
   }
