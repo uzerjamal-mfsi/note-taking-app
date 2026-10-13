@@ -1,10 +1,22 @@
 # CLAUDE.md
 
+## Structure & references
+
+- Monorepo (pnpm): `apps/api` (Express), `apps/web` (React), `packages/shared` (Zod + DTOs), `packages/db` (Prisma), `packages/config`.
+- Scoped rules: `apps/api/CLAUDE.md`, `apps/web/CLAUDE.md`, `packages/shared/CLAUDE.md`, `packages/db/CLAUDE.md` (load when working in those dirs).
+- Docs: requirements `docs/requirements/FRS.md`, design `docs/architecture/SDS.md`, ADRs `docs/architecture/adr/`, lifecycle `docs/development/sdd-workflow.md`, agent contract `AGENTS.md`.
+
 ## Workflow
 
 - For features, breaking changes, or architecture changes: use OpenSpec (/opsx:\*).
 - Do not write production code without an approved change in openspec/changes/.
 - Small bug fixes / typos / dependency bumps may skip the spec (see "Fast lane").
+- Run the lifecycle with `/sdd <change>` (see `AGENTS.md`): spec -> test-writer (+ e2e-test-writer) -> implement -> checks -> code-reviewer AND spec-reviewer (independent) -> verify/docs sync -> archive.
+- Tests first: write tests from spec scenarios before implementation; a PASS from a reviewer is void after later code changes.
+- Docs sync: update FRS/SDS only when a change alters permanent requirements/architecture.
+- Never report a change complete with skipped/failed checks, unrun reviewers, or UNVERIFIED criteria. Use PASS / FAIL / BLOCKED / NOT APPLICABLE; never turn a skipped check into PASS.
+- Completion report: changes, gate table (stage -> status + evidence/command), reviewer verdicts, unverified items, remaining gaps.
+- Workflow files check: `pnpm run validate:workflow`.
 - All commits must follow conventional format: feat(scope): description AB#ticket.
 
 ## Commands (run from repo root)
